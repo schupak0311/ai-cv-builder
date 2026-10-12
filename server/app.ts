@@ -9,6 +9,7 @@ import { authRoutes } from "./auth/routes.js";
 import { cvRoutes } from "./cvs/routes.js";
 import type { Sql } from "./db.js";
 import { HttpError, JOB_ACTIVE } from "./http.js";
+import { jobRoutes } from "./jobs/routes.js";
 import { questionRoutes } from "./questions/routes.js";
 
 export async function buildApp(options: {
@@ -38,6 +39,7 @@ export async function buildApp(options: {
   authRoutes(app, options.sql);
   cvRoutes(app, options.sql);
   questionRoutes(app, options.sql);
+  jobRoutes(app, options.sql);
 
   const webDir = options.webDir;
   const servesWeb = webDir !== undefined && existsSync(webDir);

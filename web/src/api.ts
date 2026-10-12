@@ -61,4 +61,10 @@ export const api = {
     request(`/api/cvs/${encodeURIComponent(id)}`, SavedCv, { method: "PUT", body }),
   pdfUrl: (id: string) => `/api/cvs/${encodeURIComponent(id)}/pdf`,
   deleteCv: (id: string) => request(`/api/cvs/${encodeURIComponent(id)}`, z.null(), { method: "DELETE" }),
+  answer: ({ cvId, questionId, answer }: { cvId: string; questionId: string; answer: string }) =>
+    request(`/api/cvs/${encodeURIComponent(cvId)}/questions/${encodeURIComponent(questionId)}/answer`, z.null(), {
+      method: "POST",
+      body: { answer },
+    }),
+  retry: (cvId: string) => request(`/api/cvs/${encodeURIComponent(cvId)}/retry`, z.null(), { method: "POST" }),
 };

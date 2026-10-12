@@ -4,7 +4,7 @@ import { type SavedCv, SOURCE_TEXT_MAX, SOURCE_TEXT_MIN, TARGET_ROLE_MAX, TARGET
 import { Cv } from "../../shared/cv.js";
 import { requireUser } from "../auth/sessions.js";
 import type { Sql } from "../db.js";
-import { HttpError, JOB_ACTIVE, parseBody } from "../http.js";
+import { HttpError, JOB_ACTIVE, params, parseBody } from "../http.js";
 import { renderCvPdf } from "../export/pdf.js";
 import { pdfToSource } from "../ingest/pdf.js";
 import { createCv, deleteCv, getCv, getCvContent, listCvs, saveCvContent } from "./repo.js";
@@ -51,7 +51,7 @@ async function readPdfUpload(app: FastifyInstance, request: FastifyRequest): Pro
   return { targetRole, sourceKind: "pdf", sourceText };
 }
 
-const CV_NOT_FOUND = "CV not found.";
+export const CV_NOT_FOUND = "CV not found.";
 const NO_CONTENT = "This CV has no content yet.";
 
 const SaveCvBody = z.object({ content: Cv, version: z.number().int() });
@@ -64,10 +64,8 @@ function contentDisposition(cv: Cv): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-function cvIdParam(request: FastifyRequest): string {
-  const parsed = z.object({ id: z.uuid() }).safeParse(request.params);
-  if (!parsed.success) throw new HttpError(404, CV_NOT_FOUND);
-  return parsed.data.id;
+export function cvIdParam(request: FastifyRequest): string {
+  return params(z.object({ id: z.uuid() }), request, CV_NOT_FOUND).id;
 }
 
 export function cvRoutes(app: FastifyInstance, sql: Sql): void {

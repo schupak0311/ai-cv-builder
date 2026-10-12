@@ -2,8 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ANSWER_MAX, type CvDetail } from "../../../shared/api.js";
 import { CvSection } from "../../../shared/cv.js";
-import { questionsApi } from "../questionsApi.js";
-import "./QuestionsPanel.css";
+import { api } from "../api.js";
 
 type Question = CvDetail["questions"][number];
 
@@ -61,7 +60,7 @@ function AnswerForm({ cvId, question, blocked }: { cvId: string; question: Quest
   const queryClient = useQueryClient();
   const [answer, setAnswer] = useState("");
   const submit = useMutation({
-    mutationFn: () => questionsApi.answer({ cvId, questionId: question.id, answer }),
+    mutationFn: () => api.answer({ cvId, questionId: question.id, answer }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cv", cvId] }),
   });
   const fieldId = `answer-${question.id}`;

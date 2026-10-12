@@ -1,3 +1,4 @@
+import type { FastifyRequest } from "fastify";
 import type { z } from "zod";
 
 export const JOB_ACTIVE = "Wait for the current update to finish.";
@@ -29,4 +30,11 @@ export function parseBody<T extends z.ZodType>(schema: T, body: unknown): z.infe
     throw new HttpError(400, issue?.message ?? "Invalid request.");
   }
   return result.data;
+}
+
+/** Parses route params, answering 404 with `notFound` when an id is malformed. */
+export function params<T extends z.ZodType>(schema: T, request: FastifyRequest, notFound: string): z.infer<T> {
+  const parsed = schema.safeParse(request.params);
+  if (!parsed.success) throw new HttpError(404, notFound);
+  return parsed.data;
 }

@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { questionsApi } from "../questionsApi.js";
+import { api } from "../api.js";
 import { SAVE_FIRST } from "./QuestionsPanel.js";
 
 export function RetryJob({ cvId, blocked }: { cvId: string; blocked: boolean }) {
   const queryClient = useQueryClient();
   const retry = useMutation({
-    mutationFn: () => questionsApi.retry(cvId),
+    mutationFn: () => api.retry(cvId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cv", cvId] }),
   });
   return (

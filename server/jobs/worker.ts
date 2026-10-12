@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type { FastifyBaseLogger } from "fastify";
 import { z } from "zod";
+import type { JobKind } from "../../shared/api.js";
 import type { Cv, CvSection } from "../../shared/cv.js";
 import type { Sql } from "../db.js";
 import { checkDraft, countClaims } from "../factcheck/factcheck.js";
@@ -11,7 +12,6 @@ export const MAX_ATTEMPTS = 3;
 const GENERIC_ERROR = "Something went wrong while drafting this CV. Try again.";
 const UNUSABLE_ANSWER = "Claude could not use this answer. Try again, or edit the section by hand.";
 
-type JobKind = "generate" | "revise";
 type ClaimedJob = { id: string; cvId: string; kind: JobKind; payload: unknown; attempts: number };
 
 const RevisePayload = z.object({ questionId: z.uuid(), answer: z.string() });
