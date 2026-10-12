@@ -40,11 +40,10 @@ export async function buildApp(options: {
   questionRoutes(app, options.sql);
 
   const webDir = options.webDir;
-  if (webDir !== undefined && existsSync(webDir)) {
-    await app.register(fastifyStatic, { root: webDir, wildcard: false });
-  }
+  const servesWeb = webDir !== undefined && existsSync(webDir);
+  if (servesWeb) await app.register(fastifyStatic, { root: webDir, wildcard: false });
   app.setNotFoundHandler((request, reply) => {
-    if (webDir !== undefined && request.method === "GET" && !request.url.startsWith("/api/")) {
+    if (servesWeb && request.method === "GET" && !request.url.startsWith("/api/")) {
       return reply.sendFile("index.html");
     }
     return reply.code(404).send({ error: "Not found." });
