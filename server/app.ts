@@ -1,7 +1,9 @@
 import { existsSync } from "node:fs";
 import cookie from "@fastify/cookie";
+import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
+import { PDF_MAX_BYTES } from "../shared/api.js";
 import { authRoutes } from "./auth/routes.js";
 import { cvRoutes } from "./cvs/routes.js";
 import type { Sql } from "./db.js";
@@ -14,6 +16,9 @@ export async function buildApp(options: {
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false, bodyLimit: 256 * 1024 });
   await app.register(cookie);
+  await app.register(multipart, {
+    limits: { files: 1, fileSize: PDF_MAX_BYTES, fields: 4, fieldSize: 1024, parts: 5 },
+  });
 
   app.setErrorHandler((err, request, reply) => {
     if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.message });

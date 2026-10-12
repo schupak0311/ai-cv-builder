@@ -47,3 +47,6 @@ export const SOURCE_TEXT_MIN = 50;
 export const SOURCE_TEXT_MAX = 20_000;
 export const TARGET_ROLE_MIN = 2;
 export const TARGET_ROLE_MAX = 120;
+export const PDF_MAX_BYTES = 5 * 1024 * 1024;
+export const PDF_MAX_PAGES = 10;
+export const PDF_TEXT_MIN = 100;

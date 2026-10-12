@@ -9,20 +9,50 @@ import {
 import { requireUser } from "../auth/sessions.js";
 import type { Sql } from "../db.js";
 import { HttpError, parseBody } from "../http.js";
-import { createCvFromText, deleteCv, getCv, listCvs } from "./repo.js";
+import { pdfToSource } from "../ingest/pdf.js";
+import { createCv, deleteCv, getCv, listCvs } from "./repo.js";
+
+const TargetRole = z
+  .string()
+  .trim()
+  .min(TARGET_ROLE_MIN, `Enter a target role of at least ${TARGET_ROLE_MIN} characters.`)
+  .max(TARGET_ROLE_MAX, `Keep the target role under ${TARGET_ROLE_MAX} characters.`);
+
+const SOURCE_TEXT_TOO_LONG = `Keep your text under ${SOURCE_TEXT_MAX.toLocaleString("en-US")} characters.`;
 
 const CreateCvBody = z.object({
-  targetRole: z
-    .string()
-    .trim()
-    .min(TARGET_ROLE_MIN, `Enter a target role of at least ${TARGET_ROLE_MIN} characters.`)
-    .max(TARGET_ROLE_MAX, `Keep the target role under ${TARGET_ROLE_MAX} characters.`),
+  targetRole: TargetRole,
   sourceText: z
     .string()
     .trim()
     .min(SOURCE_TEXT_MIN, `Describe your background in at least ${SOURCE_TEXT_MIN} characters.`)
-    .max(SOURCE_TEXT_MAX, `Keep your text under ${SOURCE_TEXT_MAX.toLocaleString("en-US")} characters.`),
+    .max(SOURCE_TEXT_MAX, SOURCE_TEXT_TOO_LONG),
 });
+
+const UploadFields = z.object({ targetRole: TargetRole });
+
+type NewSource = { targetRole: string; sourceKind: "text" | "pdf"; sourceText: string };
+
+async function readPdfUpload(app: FastifyInstance, request: FastifyRequest): Promise<NewSource> {
+  const fields: Record<string, unknown> = {};
+  let file: Buffer | undefined;
+  try {
+    for await (const part of request.parts()) {
+      if (part.type === "file") file = await part.toBuffer();
+      else fields[part.fieldname] = part.value;
+    }
+  } catch (err) {
+    if (err instanceof app.multipartErrors.RequestFileTooLargeError) {
+      throw new HttpError(413, "The file is larger than 5 MB.");
+    }
+    throw err;
+  }
+  const { targetRole } = parseBody(UploadFields, fields);
+  if (file === undefined) throw new HttpError(400, "Choose a PDF file.");
+  const sourceText = await pdfToSource(file);
+  if (sourceText.length > SOURCE_TEXT_MAX) throw new HttpError(422, SOURCE_TEXT_TOO_LONG);
+  return { targetRole, sourceKind: "pdf", sourceText };
+}
 
 const CV_NOT_FOUND = "CV not found.";
 
@@ -40,8 +70,10 @@ export function cvRoutes(app: FastifyInstance, sql: Sql): void {
 
   app.post("/api/cvs", async (request, reply) => {
     const user = await requireUser(sql, request);
-    const body = parseBody(CreateCvBody, request.body);
-    const id = await createCvFromText(sql, { ownerId: user.id, ...body });
+    const source: NewSource = request.isMultipart()
+      ? await readPdfUpload(app, request)
+      : { ...parseBody(CreateCvBody, request.body), sourceKind: "text" };
+    const id = await createCv(sql, { ownerId: user.id, ...source });
     return reply.code(201).send({ id });
   });
 

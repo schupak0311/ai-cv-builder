@@ -24,14 +24,14 @@ export async function listCvs(sql: Sql, ownerId: UserId): Promise<CvSummary[]> {
   }));
 }
 
-export async function createCvFromText(
+export async function createCv(
   sql: Sql,
-  input: { ownerId: UserId; targetRole: string; sourceText: string },
+  input: { ownerId: UserId; targetRole: string; sourceKind: "text" | "pdf"; sourceText: string },
 ): Promise<string> {
   return sql.begin(async (tx) => {
     const [cv] = await tx<{ id: string }[]>`
       insert into cvs (owner_id, target_role, source_kind, source_text)
-      values (${input.ownerId}, ${input.targetRole}, 'text', ${input.sourceText})
+      values (${input.ownerId}, ${input.targetRole}, ${input.sourceKind}, ${input.sourceText})
       returning id
     `;
     if (cv === undefined) throw new Error("Insert returned no CV");
