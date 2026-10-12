@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import type { CvDraft, Llm } from "./llm.js";
+import type { CvDraft, Llm, ReviseInput } from "./llm.js";
 
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 const PHONE = /\+?\d[\d ().-]{7,}\d/;
@@ -62,11 +62,37 @@ export function fakeDraft({ targetRole, source }: { targetRole: string; source: 
   };
 }
 
+const EMPTY_DRAFT: CvDraft = {
+  contact: { name: null, email: null, phone: null, location: null, links: [] },
+  summary: [],
+  experience: [],
+  education: [],
+  skills: [],
+  questions: [],
+};
+
+/**
+ * Appends each summary Answer the current summary lacks, each sentence quoting itself as Evidence.
+ * Other sections come back empty, which the worker treats as "keep the current section".
+ */
+export function fakeRevise({ section, content, answered }: ReviseInput): CvDraft {
+  if (section !== "summary") return EMPTY_DRAFT;
+  const added = answered.filter((q) => q.section === "summary" && !content.summary.includes(q.answer));
+  const sentences = [content.summary, ...added.map((q) => q.answer)]
+    .filter((text) => text.length > 0)
+    .map((text) => ({ text, evidence: [text] }));
+  return { ...EMPTY_DRAFT, summary: sentences };
+}
+
 export function createFakeLlm(delayMs: number): Llm {
   return {
     async draft(input) {
       await sleep(delayMs);
       return fakeDraft(input);
+    },
+    async revise(input) {
+      await sleep(delayMs);
+      return fakeRevise(input);
     },
   };
 }

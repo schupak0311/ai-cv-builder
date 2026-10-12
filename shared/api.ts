@@ -50,6 +50,7 @@ export const TARGET_ROLE_MAX = 120;
 export const PDF_MAX_BYTES = 5 * 1024 * 1024;
 export const PDF_MAX_PAGES = 10;
 export const PDF_TEXT_MIN = 100;
+export const ANSWER_MAX = 2_000;
 
 export const CV_EDIT_SHORT_MAX = 200;
 export const CV_EDIT_SUMMARY_MAX = 3_000;

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { describe, expect, test } from "vitest";
 import type { CvDetail } from "../../shared/api.js";
 import { createCv, signUp, useTestApp } from "../../test/helpers.js";
-import { createFakeLlm, fakeDraft } from "../llm/fake.js";
+import { createFakeLlm, fakeDraft, fakeRevise } from "../llm/fake.js";
 import { LlmError, type Llm } from "../llm/llm.js";
 import { claimNextJob, processNextJob, requeueRunningJobs } from "./worker.js";
 
@@ -10,7 +10,7 @@ const ctx = useTestApp();
 const fakeLlm = createFakeLlm(0);
 
 function failingLlm(error: Error): Llm {
-  return { draft: () => Promise.reject(error) };
+  return { draft: () => Promise.reject(error), revise: () => Promise.reject(error) };
 }
 
 async function deps(llm: Llm) {
@@ -62,6 +62,7 @@ describe("jobs", () => {
     expect(cv.job).toBeNull();
     expect(cv.error).toBeNull();
     expect(cv.content).toEqual(EXPECTED_CONTENT);
+    expect(cv.version).toBe(2);
     expect(cv.questions.map(({ section, text, answer }) => ({ section, text, answer }))).toEqual([
       { section: "summary", text: "What makes you a strong fit for the Senior Backend Engineer role?", answer: null },
     ]);
@@ -87,6 +88,7 @@ describe("jobs", () => {
         });
         return Promise.resolve(draft);
       },
+      revise: (input) => Promise.resolve(fakeRevise(input)),
     };
 
     await processNextJob(await deps(inventing));

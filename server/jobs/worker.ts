@@ -1,14 +1,19 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type { FastifyBaseLogger } from "fastify";
+import { z } from "zod";
+import type { Cv, CvSection } from "../../shared/cv.js";
 import type { Sql } from "../db.js";
 import { checkDraft, countClaims } from "../factcheck/factcheck.js";
-import { draftToCv, LlmError, type Llm } from "../llm/llm.js";
+import { draftToCv, LlmError, type AnsweredQuestion, type Llm } from "../llm/llm.js";
+import { applyRevision } from "./revise.js";
 
 export const MAX_ATTEMPTS = 3;
 const GENERIC_ERROR = "Something went wrong while drafting this CV. Try again.";
 
 type JobKind = "generate" | "revise";
-type ClaimedJob = { id: string; cvId: string; kind: JobKind; attempts: number };
+type ClaimedJob = { id: string; cvId: string; kind: JobKind; payload: unknown; attempts: number };
+
+const RevisePayload = z.object({ questionId: z.uuid() });
 
 export type WorkerDeps = { sql: Sql; llm: Llm; log: FastifyBaseLogger };
 
@@ -21,7 +26,7 @@ export async function claimNextJob(sql: Sql): Promise<ClaimedJob | null> {
       limit 1
       for update skip locked
     )
-    returning id, cv_id, kind, attempts
+    returning id, cv_id, kind, payload, attempts
   `;
   return job ?? null;
 }
@@ -45,10 +50,42 @@ async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Prom
   log.info({ jobId: job.id, claims, dropped: claims - countClaims(checked) }, "fact check");
   const { content, questions } = draftToCv(checked);
   await sql.begin(async (tx) => {
-    await tx`update cvs set content = ${tx.json(content)}, updated_at = now() where id = ${job.cvId}`;
+    await tx`
+      update cvs set content = ${tx.json(content)}, version = version + 1, updated_at = now() where id = ${job.cvId}
+    `;
     for (const q of questions) {
       await tx`insert into questions (cv_id, section, text) values (${job.cvId}, ${q.section}, ${q.text})`;
     }
+    await tx`update jobs set status = 'done', error = null, updated_at = now() where id = ${job.id}`;
+  });
+}
+
+async function runRevise({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Promise<void> {
+  const { questionId } = RevisePayload.parse(job.payload);
+  const [cv] = await sql<{ targetRole: string; sourceText: string; content: Cv | null }[]>`
+    select target_role, source_text, content from cvs where id = ${job.cvId}
+  `;
+  const [question] = await sql<{ section: CvSection }[]>`
+    select section from questions where id = ${questionId} and cv_id = ${job.cvId}
+  `;
+  if (cv?.content == null || question === undefined) throw new Error("Revise job has no CV content or Question");
+  const answered = await sql<AnsweredQuestion[]>`
+    select section, text, answer from questions
+    where cv_id = ${job.cvId} and answer is not null
+    order by answered_at, id
+  `;
+  const input = { targetRole: cv.targetRole, source: cv.sourceText, section: question.section, content: cv.content, answered };
+  const revision = applyRevision(input, await llm.revise(input));
+  log.info(
+    { jobId: job.id, section: question.section, claims: revision.claims, dropped: revision.claims - revision.kept },
+    "fact check",
+  );
+  if (revision.keptCurrent) log.warn({ jobId: job.id, section: question.section }, "revision came back empty, kept the current section");
+  await sql.begin(async (tx) => {
+    await tx`
+      update cvs set content = ${tx.json(revision.content)}, version = version + 1, updated_at = now()
+      where id = ${job.cvId}
+    `;
     await tx`update jobs set status = 'done', error = null, updated_at = now() where id = ${job.id}`;
   });
 }
@@ -62,7 +99,8 @@ export async function processNextJob(deps: WorkerDeps): Promise<boolean> {
         await runGenerate(deps, job);
         break;
       case "revise":
-        throw new Error("Revise jobs are not supported yet");
+        await runRevise(deps, job);
+        break;
       default: {
         const _exhaustive: never = job.kind;
         throw new Error(`Unknown job kind ${String(_exhaustive)}`);

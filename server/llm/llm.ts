@@ -40,8 +40,20 @@ export type CvDraft = z.infer<typeof CvDraft>;
 
 export type DraftQuestion = CvDraft["questions"][number];
 
+export type AnsweredQuestion = { section: CvSection; text: string; answer: string };
+
+/** Asks for a rewrite of `section` only, using the Source, every Answer, and the section's current content. */
+export type ReviseInput = {
+  targetRole: string;
+  source: string;
+  section: CvSection;
+  content: Cv;
+  answered: AnsweredQuestion[];
+};
+
 export interface Llm {
   draft(input: { targetRole: string; source: string }): Promise<CvDraft>;
+  revise(input: ReviseInput): Promise<CvDraft>;
 }
 
 /** An error whose message is safe to show the user. `retryable` marks transient failures. */
@@ -80,4 +92,29 @@ export function draftToCv(draft: CvDraft): { content: Cv; questions: DraftQuesti
     },
     questions: draft.questions,
   };
+}
+
+/** One value per line, so evidence quoting any stored value is a substring of the corpus. */
+export function sectionText(cv: Cv, section: CvSection): string {
+  const lines = (values: (string | null)[]) => values.filter((v) => v !== null).join("\n");
+  switch (section) {
+    case "contact": {
+      const { name, email, phone, location, links } = cv.contact;
+      return lines([name, email, phone, location, ...links]);
+    }
+    case "summary":
+      return cv.summary;
+    case "experience":
+      return cv.experience
+        .map((e) => lines([e.employer, e.title, e.location, e.start, e.end, ...e.bullets]))
+        .join("\n");
+    case "education":
+      return cv.education.map((e) => lines([e.institution, e.degree, e.start, e.end])).join("\n");
+    case "skills":
+      return lines(cv.skills);
+    default: {
+      const _exhaustive: never = section;
+      return _exhaustive;
+    }
+  }
 }

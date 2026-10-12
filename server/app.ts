@@ -8,6 +8,7 @@ import { authRoutes } from "./auth/routes.js";
 import { cvRoutes } from "./cvs/routes.js";
 import type { Sql } from "./db.js";
 import { HttpError } from "./http.js";
+import { questionRoutes } from "./questions/routes.js";
 
 export async function buildApp(options: {
   sql: Sql;
@@ -32,6 +33,7 @@ export async function buildApp(options: {
 
   authRoutes(app, options.sql);
   cvRoutes(app, options.sql);
+  questionRoutes(app, options.sql);
 
   const webDir = options.webDir;
   if (webDir !== undefined && existsSync(webDir)) {

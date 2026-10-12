@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Env } from "../env.js";
 import { CvDraft, LlmError, type Llm } from "./llm.js";
-import { buildPrompt } from "./prompt.js";
+import { buildPrompt, buildRevisePrompt } from "./prompt.js";
 
 type RealEnv = Extract<Env, { LLM_MODE: "real" }>;
 export type ClaudeOptions = { model: string; effort: RealEnv["ANTHROPIC_EFFORT"] };
@@ -33,9 +33,8 @@ function toLlmError(err: unknown): unknown {
 export async function requestDraft(
   client: MessagesClient,
   { model, effort }: ClaudeOptions,
-  input: { targetRole: string; source: string },
+  { system, user }: { system: string; user: string },
 ): Promise<{ draft: CvDraft; usage: Anthropic.Usage }> {
-  const { system, user } = buildPrompt(input);
   let message: Anthropic.Message;
   try {
     message = await client.messages.create({
@@ -87,7 +86,10 @@ export function createClaudeClient(apiKey: string): MessagesClient {
 export function createClaudeLlm(client: MessagesClient, options: ClaudeOptions): Llm {
   return {
     async draft(input) {
-      return (await requestDraft(client, options, input)).draft;
+      return (await requestDraft(client, options, buildPrompt(input))).draft;
+    },
+    async revise(input) {
+      return (await requestDraft(client, options, buildRevisePrompt(input))).draft;
     },
   };
 }
