@@ -27,7 +27,7 @@ The map covers the app as of `main` at `d13845b`: sign up, log in, log out, the 
 - Capture the action and the resulting state: a screenshot before the submit and after the result, plus an ARIA snapshot of the result.
 - Mutation proof includes a second read: the CV list, `curl $B/api/cvs/<id>`, or a `jobs` row.
 - Copy each MCP file into `$EV` with `"$V" grab`, named by step number and feature ID.
-- Each UI proof includes one phone-width screenshot at 390 by 844 and a `scrollWidth` reading of at most 390.
+- The phone checks, a screenshot at 390 by 844 and a `scrollWidth` reading of at most 390, are in `create-cv.md` and `edit-cv.md`.
 - Report each feature ID you drove, and each one you skipped with the reason. Do not report an entry point as verified through a different one.
 
 ## Feature entry contract

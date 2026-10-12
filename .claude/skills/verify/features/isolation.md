@@ -25,11 +25,11 @@ Preconditions:
 
 - **API read.** `curl -s -b "$EV/b.jar" -w ' %{http_code}\n' $B/api/cvs/<id>` prints `{"error":"CV not found."} 404`.
 - **API delete.** `curl -s -b "$EV/b.jar" -X DELETE -w ' %{http_code}\n' $B/api/cvs/<id>` prints `{"error":"CV not found."} 404`.
-- **API list.** `curl -s -b "$EV/b.jar" $B/api/cvs` prints `[]`.
+- **API list.** `curl -s -b "$EV/b.jar" $B/api/cvs | jq -c 'map(.targetRole)'` does not contain `"Platform Engineer"`. It prints `[]` unless user B created a CV in another feature, such as `retry-and-errors.md`.
 - **API writes.** With `-b "$EV/b.jar" -w ' %{http_code}\n'`: `GET $B/api/cvs/<id>/pdf` and `-X POST $B/api/cvs/<id>/retry` print `{"error":"CV not found."} 404`. A `-X PUT` with A's content and version, `curl -s -b "$EV/a.jar" $B/api/cvs/<id> | jq -c '{content, version}' | curl -s -b "$EV/b.jar" -X PUT -H 'content-type: application/json' -d @- -w ' %{http_code}\n' $B/api/cvs/<id>`, prints `{"error":"CV not found."} 404`. `-X POST -H 'content-type: application/json' -d '{"answer":"x"}' $B/api/cvs/<id>/questions/<qid>/answer` prints `{"error":"Question not found."} 404`.
 - **Still there for A.** `curl -s -b "$EV/a.jar" $B/api/cvs/<id> | jq -c '{targetRole}'` prints `{"targetRole":"Platform Engineer"}`.
 - **Anonymous.** `curl -s -w ' %{http_code}\n'` against `$B/api/cvs`, `$B/api/cvs/<id>`, and with `-X DELETE` against `$B/api/cvs/<id>`, each print `{"error":"Log in to continue."} 401`.
-- **Browser.** Log in as user B in the browser (`account.md`, Log in). The list shows `You have no CVs yet.`. `browser_navigate` to `$B/cvs/<id>`. The page shows heading `CV not found.`, no `Platform Engineer` heading, and no `Delete`. Screenshot and `browser_snapshot`.
+- **Browser.** Log in as user B in the browser (`account.md`, Log in). The list does not show `Platform Engineer`. `browser_navigate` to `$B/cvs/<id>`. The page shows heading `CV not found.`, no `Platform Engineer` heading, and no `Delete`. Screenshot and `browser_snapshot`.
 - **Proof.** Save every curl output above into `$EV/isolation.txt` with the command beside it.
 
 ## Gotchas

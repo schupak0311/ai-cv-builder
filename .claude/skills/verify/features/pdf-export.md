@@ -4,7 +4,7 @@ On a drafted CV's page, the `Download PDF` link in the save bar downloads the sa
 
 ## Sub-features
 
-- `pdf-download` downloads the PDF from the browser with the CV's name in the filename.
+- `pdf-download` links the browser to the PDF, served with the CV's name in the filename. The MCP cannot complete a browser download, so the link and the served file are checked separately.
 - `pdf-a4` renders every page at 595.28 by 841.89 points.
 - `pdf-content` contains the saved content, including a saved edit.
 - `pdf-refuse` answers 401 signed out, 404 for a missing or another user's CV, and 409 `This CV has no content yet.` while the first draft runs.
@@ -37,12 +37,12 @@ Preconditions:
   }
   const { text } = await extractText(doc, { mergePages: true });
   const a4 = sizes.every(([w, h]) => w === 595.28 && h === 841.89);
-  const hasEdit = Boolean(expected) && text.includes(expected);
+  const hasEdit = Boolean(expected) && text.replace(/\s+/g, " ").includes(expected);
   console.log(JSON.stringify({ bytes: size, pages: doc.numPages, sizes, a4, expected, hasEdit, text }, null, 2));
   process.exit(a4 && hasEdit ? 0 : 1);
   ```
 
-- **Download.** `browser_click` `role=link[name="Download PDF"]`. The result's Events list `Downloaded file <Name> CV.pdf to ".playwright-mcp/<Name>-CV.pdf"`, with spaces turned into dashes. `"$V" grab "$EV" ".playwright-mcp/<Name>-CV.pdf" 11-cv.pdf`.
+- **Download.** Do not click `Download PDF` in the browser. The Playwright MCP crashes on the download with `Cannot read properties of undefined (reading 'url')` and resets every tab. Check the link instead: `browser_evaluate` `() => { const a = document.querySelector('a[download]'); return [a.getAttribute('href'), a.textContent]; }` returns `["/api/cvs/<id>/pdf","Download PDF"]`. Then fetch the same URL with the account's jar: `curl -s -b "$EV/a.jar" -o "$EV/11-cv.pdf" $B/api/cvs/<id>/pdf`.
 - **Check.** `"$V" node "$S/check-pdf.mjs" "$EDIT" < "$EV/11-cv.pdf" >| "$EV/11-pdf-check.json"; echo $?` prints `0`, and `jq -c '{bytes,pages,sizes,a4,hasEdit}' "$EV/11-pdf-check.json"` shows `"a4":true,"hasEdit":true` with every size `[595.28,841.89]`. The `text` field reads the name, `email · phone · link`, then `Summary`, `Experience` and `Skills`. Run it once more with a phrase that is not in the CV and confirm it exits `1`, so a pass means something.
 - **Headers.** `curl -s -b "$EV/a.jar" -D - -o /dev/null $B/api/cvs/<id>/pdf` shows `content-type: application/pdf` and `content-disposition: attachment; filename="<Name> CV.pdf"; filename*=UTF-8''<Name%20CV.pdf>`.
 - **Refusals.** Without a jar, `curl -s -w ' %{http_code}\n' $B/api/cvs/<id>/pdf` prints `{"error":"Log in to continue."} 401`. With the jar and `00000000-0000-4000-8000-000000000000` as the id it prints `{"error":"CV not found."} 404`. On a CV created by API under `FAKE_LLM_DELAY_MS=20000`, called before the draft lands, it prints `{"error":"This CV has no content yet."} 409`.
