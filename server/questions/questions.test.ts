@@ -4,7 +4,7 @@ import type { CvDetail } from "../../shared/api.js";
 import { createCv, signUp, useTestApp } from "../../test/helpers.js";
 import { processNextJob } from "../jobs/worker.js";
 import { createFakeLlm } from "../llm/fake.js";
-import type { CvDraft, Llm } from "../llm/llm.js";
+import { LlmError, type CvDraft, type Llm } from "../llm/llm.js";
 
 const ctx = useTestApp();
 const fakeLlm = createFakeLlm(0);
@@ -187,5 +187,38 @@ describe("answering a Question", () => {
       { kind: "generate", payload: {}, status: "done" },
       { kind: "revise", payload: { questionId: first.questionId }, status: "done" },
     ]);
+  });
+});
+
+describe("retrying a job", () => {
+  test("re-queues a failed revise with the same payload, then refuses once it is done", async () => {
+    const app = await ctx.app();
+    const anna = await signUp(app, "anna@example.com");
+    const { id, questionId } = await doneCv(app, anna);
+    expect((await answer(app, anna, id, questionId, ANSWER)).statusCode).toBe(202);
+    const refusing = new LlmError("Claude declined to process this CV.", false);
+    await run({ draft: () => Promise.reject(refusing), revise: () => Promise.reject(refusing) });
+    expect((await detail(app, anna, id)).error).toBe("Claude declined to process this CV.");
+
+    const bob = await signUp(app, "bob@example.com");
+    const foreign = await app.inject({ method: "POST", url: `/api/cvs/${id}/retry`, headers: { cookie: bob } });
+    expect(foreign.statusCode).toBe(404);
+    expect(foreign.json()).toEqual({ error: "CV not found." });
+
+    const retry = await app.inject({ method: "POST", url: `/api/cvs/${id}/retry`, headers: { cookie: anna } });
+    expect(retry.statusCode).toBe(202);
+    expect(await jobs()).toEqual([
+      { kind: "generate", payload: {}, status: "done" },
+      { kind: "revise", payload: { questionId }, status: "failed" },
+      { kind: "revise", payload: { questionId }, status: "queued" },
+    ]);
+
+    await run(fakeLlm);
+    expect((await detail(app, anna, id)).content?.summary).toBe(`${SUMMARY} ${ANSWER}`);
+
+    const nothing = await app.inject({ method: "POST", url: `/api/cvs/${id}/retry`, headers: { cookie: anna } });
+    expect(nothing.statusCode).toBe(409);
+    expect(nothing.json()).toEqual({ error: "Nothing to retry." });
+    expect(await ctx.sql`select count(*)::int as n from jobs`).toEqual([{ n: 3 }]);
   });
 });
