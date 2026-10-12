@@ -1,13 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLayoutEffect, useRef, useState, type ComponentProps, type FormEvent } from "react";
-import {
-  CV_EDIT_BULLET_MAX,
-  CV_EDIT_LIST_MAX,
-  CV_EDIT_SHORT_MAX,
-  CV_EDIT_SUMMARY_MAX,
-  type CvDetail,
-} from "../../../shared/api.js";
-import type { Cv } from "../../../shared/cv.js";
+import type { CvDetail } from "../../../shared/api.js";
+import { CV_EDIT_BULLET_MAX, CV_EDIT_LIST_MAX, CV_EDIT_SHORT_MAX, CV_EDIT_SUMMARY_MAX, type Cv } from "../../../shared/cv.js";
 import { api, ApiError } from "../api.js";
 
 type Experience = Cv["experience"][number];

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CvSection, type Cv } from "../../shared/cv.js";
+import { Cv, CV_EDIT_BULLET_MAX, CV_EDIT_LIST_MAX, CV_EDIT_SHORT_MAX, CV_EDIT_SUMMARY_MAX, CvSection } from "../../shared/cv.js";
 
 const Evidence = z.array(z.string());
 const EvidencedText = z.object({ text: z.string(), evidence: Evidence });
@@ -67,29 +67,46 @@ export class LlmError extends Error {
   }
 }
 
+const QUESTIONS_MAX = 8;
+
+const short = (value: string | null) => (value !== null && value.length <= CV_EDIT_SHORT_MAX ? value : null);
+const within = (values: string[], max: number) => values.filter((v) => v.length <= max).slice(0, CV_EDIT_LIST_MAX);
+
+function summaryWithin(sentences: string[]): string {
+  let summary = "";
+  for (const sentence of sentences) {
+    const next = summary === "" ? sentence : `${summary} ${sentence}`;
+    if (next.length <= CV_EDIT_SUMMARY_MAX) summary = next;
+  }
+  return summary;
+}
+
+/** Holds the draft to the editor's limits: a value over its limit is dropped and a list is cut. */
 export function draftToCv(draft: CvDraft): { content: Cv; questions: DraftQuestion[] } {
-  return {
-    content: {
-      contact: draft.contact,
-      summary: draft.summary.map((s) => s.text).join(" "),
-      experience: draft.experience.map((item, i) => ({
-        id: `exp-${i + 1}`,
-        employer: item.employer,
-        title: item.title,
-        location: item.location,
-        start: item.start,
-        end: item.end,
-        bullets: item.bullets.map((b) => b.text),
-      })),
-      education: draft.education.map((item, i) => ({
-        id: `edu-${i + 1}`,
-        institution: item.institution,
-        degree: item.degree,
-        start: item.start,
-        end: item.end,
-      })),
-      skills: draft.skills,
-    },
-    questions: draft.questions,
-  };
+  const { name, email, phone, location, links } = draft.contact;
+  const content = Cv.parse({
+    contact: { name: short(name), email: short(email), phone: short(phone), location: short(location), links: within(links, CV_EDIT_SHORT_MAX) },
+    summary: summaryWithin(draft.summary.map((s) => s.text)),
+    experience: draft.experience.slice(0, CV_EDIT_LIST_MAX).map((item, i) => ({
+      id: `exp-${i + 1}`,
+      employer: short(item.employer),
+      title: short(item.title),
+      location: short(item.location),
+      start: short(item.start),
+      end: short(item.end),
+      bullets: within(
+        item.bullets.map((b) => b.text),
+        CV_EDIT_BULLET_MAX,
+      ),
+    })),
+    education: draft.education.slice(0, CV_EDIT_LIST_MAX).map((item, i) => ({
+      id: `edu-${i + 1}`,
+      institution: short(item.institution),
+      degree: short(item.degree),
+      start: short(item.start),
+      end: short(item.end),
+    })),
+    skills: within(draft.skills, CV_EDIT_SHORT_MAX),
+  });
+  return { content, questions: draft.questions.slice(0, QUESTIONS_MAX) };
 }

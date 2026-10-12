@@ -56,10 +56,5 @@ export const PDF_MAX_PAGES = 10;
 export const PDF_TEXT_MIN = 100;
 export const ANSWER_MAX = 2_000;
 
-export const CV_EDIT_SHORT_MAX = 200;
-export const CV_EDIT_SUMMARY_MAX = 3_000;
-export const CV_EDIT_BULLET_MAX = 1_000;
-export const CV_EDIT_LIST_MAX = 50;
-
 export const SavedCv = z.object({ version: z.number() });
 export type SavedCv = z.infer<typeof SavedCv>;

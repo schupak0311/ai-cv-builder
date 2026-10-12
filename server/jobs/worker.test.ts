@@ -98,6 +98,46 @@ describe("jobs", () => {
     expect(cv.content).toEqual(EXPECTED_CONTENT);
   });
 
+  test("a draft over the editor's limits is stored within them, so the CV can still be saved", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const longLink = `https://example.com/${"a".repeat(200)}`;
+    const skills = Array.from({ length: 60 }, (_, i) => `Skill ${i + 1}`);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cvs",
+      headers: { cookie },
+      payload: {
+        targetRole: "Senior Backend Engineer",
+        sourceText: `Anna Example\nhttps://github.com/anna-example ${longLink}\nSkills: ${skills.join(", ")}`,
+      },
+    });
+    const { id } = created.json<{ id: string }>();
+    const oversized: Llm = {
+      draft: () =>
+        Promise.resolve({
+          contact: { name: "Anna Example", email: null, phone: null, location: null, links: ["https://github.com/anna-example", longLink] },
+          summary: [],
+          experience: [],
+          education: [],
+          skills,
+          questions: Array.from({ length: 12 }, (_, i) => ({ section: "skills" as const, text: `Question ${i + 1}?` })),
+        }),
+      revise: () => Promise.reject(new Error("unused")),
+    };
+
+    await processNextJob(await deps(oversized));
+
+    const cv = await detail(app, cookie, id);
+    expect(cv.content?.contact.links).toEqual(["https://github.com/anna-example"]);
+    expect(cv.content?.skills).toEqual(skills.slice(0, 50));
+    expect(cv.questions.map((q) => q.text).sort()).toEqual([
+      "Question 1?", "Question 2?", "Question 3?", "Question 4?", "Question 5?", "Question 6?", "Question 7?", "Question 8?",
+    ]);
+    const save = await app.inject({ method: "PUT", url: `/api/cvs/${id}`, headers: { cookie }, payload: { content: cv.content, version: cv.version } });
+    expect(save.statusCode).toBe(200);
+  });
+
   test("a retryable model error is retried, then fails after three attempts", async () => {
     const app = await ctx.app();
     const cookie = await signUp(app, "anna@example.com");

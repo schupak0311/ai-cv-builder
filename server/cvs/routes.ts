@@ -1,16 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import {
-  CV_EDIT_BULLET_MAX,
-  CV_EDIT_LIST_MAX,
-  CV_EDIT_SHORT_MAX,
-  CV_EDIT_SUMMARY_MAX,
-  type SavedCv,
-  SOURCE_TEXT_MAX,
-  SOURCE_TEXT_MIN,
-  TARGET_ROLE_MAX,
-  TARGET_ROLE_MIN,
-} from "../../shared/api.js";
+import { type SavedCv, SOURCE_TEXT_MAX, SOURCE_TEXT_MIN, TARGET_ROLE_MAX, TARGET_ROLE_MIN } from "../../shared/api.js";
 import { Cv } from "../../shared/cv.js";
 import { requireUser } from "../auth/sessions.js";
 import type { Sql } from "../db.js";
@@ -64,49 +54,7 @@ async function readPdfUpload(app: FastifyInstance, request: FastifyRequest): Pro
 const CV_NOT_FOUND = "CV not found.";
 const NO_CONTENT = "This CV has no content yet.";
 
-const shortText = z.string().max(CV_EDIT_SHORT_MAX, `Keep each short field under ${CV_EDIT_SHORT_MAX} characters.`);
-const nullableShort = shortText.nullable();
-function list<T extends z.ZodType>(item: T) {
-  return z.array(item).max(CV_EDIT_LIST_MAX, `Keep each list under ${CV_EDIT_LIST_MAX} items.`);
-}
-
-const EditedCv = Cv.extend({
-  contact: Cv.shape.contact.extend({
-    name: nullableShort,
-    email: nullableShort,
-    phone: nullableShort,
-    location: nullableShort,
-    links: list(shortText),
-  }),
-  summary: z
-    .string()
-    .max(CV_EDIT_SUMMARY_MAX, `Keep the summary under ${CV_EDIT_SUMMARY_MAX.toLocaleString("en-US")} characters.`),
-  experience: list(
-    Cv.shape.experience.element.extend({
-      id: shortText,
-      employer: nullableShort,
-      title: nullableShort,
-      location: nullableShort,
-      start: nullableShort,
-      end: nullableShort,
-      bullets: list(
-        z.string().max(CV_EDIT_BULLET_MAX, `Keep each bullet under ${CV_EDIT_BULLET_MAX.toLocaleString("en-US")} characters.`),
-      ),
-    }),
-  ),
-  education: list(
-    Cv.shape.education.element.extend({
-      id: shortText,
-      institution: nullableShort,
-      degree: nullableShort,
-      start: nullableShort,
-      end: nullableShort,
-    }),
-  ),
-  skills: list(shortText),
-});
-
-const SaveCvBody = z.object({ content: EditedCv, version: z.number().int() });
+const SaveCvBody = z.object({ content: Cv, version: z.number().int() });
 
 function contentDisposition(cv: Cv): string {
   const name = cv.contact.name?.trim();
