@@ -9,8 +9,8 @@ export function createLlm(env: Env): Llm {
       return createFakeLlm(env.FAKE_LLM_DELAY_MS);
     case "real":
       return createClaudeLlm(createClaudeClient(env.ANTHROPIC_API_KEY), {
-        model: env.ANTHROPIC_MODEL,
-        effort: env.ANTHROPIC_EFFORT,
+        model: env.CV_MODEL,
+        effort: env.CV_EFFORT,
       });
     default: {
       const _exhaustive: never = env;

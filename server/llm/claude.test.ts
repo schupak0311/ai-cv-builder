@@ -133,7 +133,7 @@ describe("Claude client", () => {
     {
       name: "an unknown model",
       reply: () => Promise.reject(new Anthropic.NotFoundError(404, undefined, "model: claude-x", headers)),
-      message: "The Claude model was not found. Check ANTHROPIC_MODEL.",
+      message: "The Claude model was not found. Check CV_MODEL.",
       retryable: false,
     },
   ])("$name surfaces as an LlmError", async ({ reply, message: expected, retryable }) => {

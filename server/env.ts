@@ -7,8 +7,8 @@ const Env = z.discriminatedUnion("LLM_MODE", [
     LLM_MODE: z.literal("real"),
     DATABASE_URL: z.string().min(1),
     ANTHROPIC_API_KEY: z.string({ error: MISSING_KEY }).min(1, MISSING_KEY),
-    ANTHROPIC_MODEL: z.string().min(1).default("claude-opus-5-5"),
-    ANTHROPIC_EFFORT: z.enum(["low", "medium", "high"]).default("medium"),
+    CV_MODEL: z.string().min(1).default("claude-opus-5-5"),
+    CV_EFFORT: z.enum(["low", "medium", "high"]).default("medium"),
   }),
   z.object({
     LLM_MODE: z.literal("fake"),

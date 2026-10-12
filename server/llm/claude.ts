@@ -5,7 +5,7 @@ import { CvDraft, LlmError, type Llm } from "./llm.js";
 import { buildPrompt, buildRevisePrompt } from "./prompt.js";
 
 type RealEnv = Extract<Env, { LLM_MODE: "real" }>;
-export type ClaudeOptions = { model: string; effort: RealEnv["ANTHROPIC_EFFORT"] };
+export type ClaudeOptions = { model: string; effort: RealEnv["CV_EFFORT"] };
 
 /** The one SDK call this module makes, so tests can pass a stub without the network. */
 export type MessagesClient = {
@@ -21,7 +21,7 @@ function toLlmError(err: unknown): unknown {
   if (err instanceof Anthropic.InternalServerError) return new LlmError("Claude is having trouble right now. Try again in a minute.", true);
   if (err instanceof Anthropic.AuthenticationError) return new LlmError("The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.", false);
   if (err instanceof Anthropic.PermissionDeniedError) return new LlmError("The Anthropic API key may not use this model.", false);
-  if (err instanceof Anthropic.NotFoundError) return new LlmError("The Claude model was not found. Check ANTHROPIC_MODEL.", false);
+  if (err instanceof Anthropic.NotFoundError) return new LlmError("The Claude model was not found. Check CV_MODEL.", false);
   if (err instanceof Anthropic.BadRequestError) return new LlmError("Claude rejected the request for this CV.", false);
   return err;
 }

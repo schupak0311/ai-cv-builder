@@ -16,12 +16,12 @@ if (!apiKey.startsWith("sk-ant-")) {
   console.error("No real ANTHROPIC_API_KEY is set. Export one to run the live smoke test.");
   process.exit(1);
 }
-const effort = process.env.ANTHROPIC_EFFORT ?? "medium";
+const effort = process.env.CV_EFFORT ?? "medium";
 if (effort !== "low" && effort !== "medium" && effort !== "high") {
-  console.error("ANTHROPIC_EFFORT must be low, medium or high.");
+  console.error("CV_EFFORT must be low, medium or high.");
   process.exit(1);
 }
-const options: ClaudeOptions = { model: process.env.ANTHROPIC_MODEL ?? "claude-opus-5-5", effort };
+const options: ClaudeOptions = { model: process.env.CV_MODEL ?? "claude-opus-5-5", effort };
 const client = createClaudeClient(apiKey);
 console.log(`model ${options.model}, effort ${options.effort}`);
 

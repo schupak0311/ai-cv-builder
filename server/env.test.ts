@@ -10,19 +10,19 @@ test("the real model is the default and needs an API key", () => {
     LLM_MODE: "real",
     DATABASE_URL: "postgres://db/cv",
     ANTHROPIC_API_KEY: "sk-test",
-    ANTHROPIC_MODEL: "claude-opus-5-5",
-    ANTHROPIC_EFFORT: "medium",
+    CV_MODEL: "claude-opus-5-5",
+    CV_EFFORT: "medium",
   });
 });
 
 test("the real model and its effort can be overridden", () => {
   const base = { DATABASE_URL: "postgres://db/cv", ANTHROPIC_API_KEY: "sk-test" };
-  expect(parseEnv({ ...base, ANTHROPIC_MODEL: "claude-sonnet-5-5", ANTHROPIC_EFFORT: "low" })).toMatchObject({
-    ANTHROPIC_MODEL: "claude-sonnet-5-5",
-    ANTHROPIC_EFFORT: "low",
+  expect(parseEnv({ ...base, CV_MODEL: "claude-sonnet-5-5", CV_EFFORT: "low" })).toMatchObject({
+    CV_MODEL: "claude-sonnet-5-5",
+    CV_EFFORT: "low",
   });
-  expect(() => parseEnv({ ...base, ANTHROPIC_EFFORT: "max" })).toThrow(
-    new Error('ANTHROPIC_EFFORT: Invalid option: expected one of "low"|"medium"|"high"'),
+  expect(() => parseEnv({ ...base, CV_EFFORT: "max" })).toThrow(
+    new Error('CV_EFFORT: Invalid option: expected one of "low"|"medium"|"high"'),
   );
 });
 
