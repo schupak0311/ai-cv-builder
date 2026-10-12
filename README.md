@@ -32,7 +32,7 @@ Compose runs two containers. `db` is Postgres 17 with no published port. `app` i
 
 **Untrusted input.** Pasted text is 50 to 20,000 characters. An upload must start with `%PDF-`, be at most 5 MB and 10 pages, and yield at least 100 characters of text, so a scanned PDF is rejected. The app keeps the extracted text, never the PDF. NUL characters are stripped at the input boundary. React and the PDF renderer write text only.
 
-**`pdfmake` for export.** A throwaway prototype compared it with `@react-pdf/renderer`. Both made A4 pages with selectable text, but react-pdf hyphenated a long URL and lost characters from the PDF's text layer.
+**`pdfmake` for export.** In a throwaway prototype, `@react-pdf/renderer` lost characters of a long URL from the PDF's text layer, and `pdfmake` did not.
 
 ## How the AI is kept from inventing facts
 
@@ -44,7 +44,7 @@ The prompt asks the model not to invent facts. The fact check removes what it in
 
 1. The check normalises both sides with NFKC, lower case, one form of each quote and dash, hyphens between letters ignored, and collapsed whitespace.
 2. Every Evidence quote must be at least two words long and occur in the corpus at word boundaries. "15" inside "2015" does not count.
-3. Every number in a Claim must appear in that Claim's own Evidence. Spelled-out numbers such as "four" are compared too.
+3. Every number in a Claim must appear in that Claim's own Evidence. Spelled-out numbers such as "four" or "twenty-five" are compared too.
 4. Every term with an uppercase letter, such as `Meta` or `iOS`, must appear in the Claim's own Evidence. In a sentence only a plain title-case first word, such as "Led", is exempt, and a colon does not start a sentence. In a header field, such as an employer or a date, no word is exempt.
 5. Contact values and skills must appear in the corpus as whole phrases.
 6. A failing sentence, bullet, contact value or skill is dropped. A failing header field becomes null, and an item left with nothing is dropped. The user is not told, and the worker logs the count.
@@ -60,10 +60,10 @@ The check is mechanical. It catches invented names and numbers, not invented pro
 - One long quote that spans two adjacent jobs pools their vocabulary, so a bullet under one job can borrow the other's names.
 - A real fact that the check misreads is dropped without notice.
 
-These are single live runs on 2026-10-12, made with `CV_MODEL=claude-sonnet-5-5` at effort `medium` to keep testing cheap. They are not a benchmark, and the default model, `claude-opus-5-5`, has not been measured.
+Two live runs on 2026-10-12 show the check on real model output. Both used `CV_MODEL=claude-sonnet-5-5` at effort `medium` to keep testing cheap. They are single runs, not a benchmark, and the default model, `claude-opus-5-5`, was not measured.
 
-- **Smoke script.** The free-text draft took 8.5 s with 2,302 input and 1,236 output tokens. The fact check kept 22 of 26 Claims, and the model asked 8 Questions. Answering one Question added both of its facts to the experience section in 4.2 s and changed no other section. The injection sample's planted MIT, PhD, CTO and Google never appeared in the model's output.
-- **Full flow through Compose.** Uploading `test/fixtures/one-column-en.pdf` produced a draft in 11 s. It matched the fixture's known facts, and the fact check kept all 41 Claims. The Questions asked about the missing end date at Brightwater Insurance and about each vague bullet. Answering the date question set that end date to "March 2021" in 6 s. The downloaded PDF was one A4 page.
+- **Smoke script.** The free-text draft took 8.5 s with 2,302 input and 1,236 output tokens. The fact check kept 22 of 26 Claims, and the model asked 7 Questions. Answering one Question added both of its facts to the experience section in 4.2 s and changed no other section. The injection sample's planted MIT, PhD, CTO and Google never appeared in the model's output.
+- **Full flow through Compose.** Uploading `test/fixtures/one-column-en.pdf` produced a draft in 11 s. Every kept fact matched the PDF, and the fact check kept all 41 Claims. The Questions asked about the missing end date at Brightwater Insurance and about each vague bullet. Answering the date question set that end date to "March 2021" in about 6 s. The downloaded PDF was one A4 page.
 
 ## What was simplified, and what would change with more time
 
