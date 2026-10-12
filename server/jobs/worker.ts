@@ -55,7 +55,9 @@ async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Prom
       update cvs set content = ${tx.json(content)}, version = version + 1, updated_at = now() where id = ${job.cvId}
     `;
     for (const q of questions) {
-      await tx`insert into questions (cv_id, section, text) values (${job.cvId}, ${q.section}, ${q.text})`;
+      await tx`
+        insert into questions (cv_id, section, text, created_at) values (${job.cvId}, ${q.section}, ${q.text}, clock_timestamp())
+      `;
     }
     await tx`update jobs set status = 'done', error = null, updated_at = now() where id = ${job.id}`;
   });

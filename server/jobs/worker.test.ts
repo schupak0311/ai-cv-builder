@@ -98,7 +98,7 @@ describe("jobs", () => {
     expect(cv.content).toEqual(EXPECTED_CONTENT);
   });
 
-  test("a draft over the editor's limits is stored within them, so the CV can still be saved", async () => {
+  test("a draft over the editor's limits is stored within them in the model's order, so the CV can still be saved", async () => {
     const app = await ctx.app();
     const cookie = await signUp(app, "anna@example.com");
     const longLink = `https://example.com/${"a".repeat(200)}`;
@@ -131,7 +131,7 @@ describe("jobs", () => {
     const cv = await detail(app, cookie, id);
     expect(cv.content?.contact.links).toEqual(["https://github.com/anna-example"]);
     expect(cv.content?.skills).toEqual(skills.slice(0, 50));
-    expect(cv.questions.map((q) => q.text).sort()).toEqual([
+    expect(cv.questions.map((q) => q.text)).toEqual([
       "Question 1?", "Question 2?", "Question 3?", "Question 4?", "Question 5?", "Question 6?", "Question 7?", "Question 8?",
     ]);
     const save = await app.inject({ method: "PUT", url: `/api/cvs/${id}`, headers: { cookie }, payload: { content: cv.content, version: cv.version } });
