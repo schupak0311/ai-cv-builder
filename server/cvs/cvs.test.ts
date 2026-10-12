@@ -41,6 +41,21 @@ describe("CVs", () => {
     expect(await ctx.sql`select 1 from cvs`).toHaveLength(0);
   });
 
+  test("a NUL character in pasted text is removed instead of failing the request", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/cvs",
+      headers: { cookie },
+      payload: { targetRole: "Senior\u0000 Backend Engineer", sourceText: `${SOURCE}\u0000` },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(await ctx.sql`select target_role, source_text from cvs`).toEqual([
+      { targetRole: "Senior Backend Engineer", sourceText: SOURCE },
+    ]);
+  });
+
   test("CV routes need a session", async () => {
     const app = await ctx.app();
     const res = await app.inject({ method: "GET", url: "/api/cvs" });

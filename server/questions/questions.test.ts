@@ -219,6 +219,15 @@ describe("answering a Question", () => {
     expect(cv.questions.map((q) => q.answer)).toEqual([ANSWER, "Docker and Grafana."]);
   });
 
+  test("a NUL character in an Answer is removed", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const { id, questionId } = await doneCv(app, cookie);
+    expect((await answer(app, cookie, id, questionId, `I mentor\u0000 two junior engineers every week.`)).statusCode).toBe(202);
+    await run(fakeLlm);
+    expect((await detail(app, cookie, id)).questions.map((q) => q.answer)).toEqual([ANSWER]);
+  });
+
   test("is rejected for a foreign CV, a foreign Question, a busy CV and a second answer, storing nothing", async () => {
     const app = await ctx.app();
     const anna = await signUp(app, "anna@example.com");

@@ -18,7 +18,7 @@ export async function pdfToSource(bytes: Buffer): Promise<string> {
     const { text } = await extractText(pdf, { mergePages: true }).catch(() => {
       throw new HttpError(422, "We could not read this PDF.");
     });
-    const source = text.trim();
+    const source = text.replaceAll("\0", "").trim();
     if (source.length < PDF_TEXT_MIN) {
       throw new HttpError(422, "This PDF has no selectable text. Paste your CV as text instead.");
     }
