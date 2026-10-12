@@ -36,8 +36,6 @@ export function questionRoutes(app: FastifyInstance, sql: Sql): void {
         throw new HttpError(404, QUESTION_NOT_FOUND);
       case "no-content":
         throw new HttpError(409, "This CV has no content to update yet.");
-      case "busy":
-        throw new HttpError(409, "Wait for the current update to finish.");
       case "already-answered":
         throw new HttpError(409, "This question already has an answer.");
       default: {

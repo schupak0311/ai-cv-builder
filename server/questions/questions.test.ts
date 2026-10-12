@@ -308,4 +308,21 @@ describe("retrying a job", () => {
     expect(nothing.json()).toEqual({ error: "Nothing to retry." });
     expect(await ctx.sql`select count(*)::int as n from jobs`).toEqual([{ n: 3 }]);
   });
+
+  test("is refused while another job on the CV is active, even when the latest job failed", async () => {
+    const app = await ctx.app();
+    const anna = await signUp(app, "anna@example.com");
+    const { id } = await doneCv(app, anna);
+    await ctx.sql`insert into jobs (cv_id, kind, status, created_at) values (${id}, 'revise', 'queued', now() - interval '1 minute')`;
+    await ctx.sql`insert into jobs (cv_id, kind, status) values (${id}, 'revise', 'failed')`;
+
+    const retry = await app.inject({ method: "POST", url: `/api/cvs/${id}/retry`, headers: { cookie: anna } });
+    expect(retry.statusCode).toBe(409);
+    expect(retry.json()).toEqual({ error: "Wait for the current update to finish." });
+    expect(await ctx.sql`select status from jobs where cv_id = ${id} order by created_at`).toEqual([
+      { status: "queued" },
+      { status: "done" },
+      { status: "failed" },
+    ]);
+  });
 });

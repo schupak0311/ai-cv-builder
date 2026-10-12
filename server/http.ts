@@ -1,5 +1,7 @@
 import type { z } from "zod";
 
+export const JOB_ACTIVE = "Wait for the current update to finish.";
+
 export class HttpError extends Error {
   constructor(
     readonly statusCode: number,

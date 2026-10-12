@@ -4,7 +4,7 @@ import { type SavedCv, SOURCE_TEXT_MAX, SOURCE_TEXT_MIN, TARGET_ROLE_MAX, TARGET
 import { Cv } from "../../shared/cv.js";
 import { requireUser } from "../auth/sessions.js";
 import type { Sql } from "../db.js";
-import { HttpError, parseBody } from "../http.js";
+import { HttpError, JOB_ACTIVE, parseBody } from "../http.js";
 import { renderCvPdf } from "../export/pdf.js";
 import { pdfToSource } from "../ingest/pdf.js";
 import { createCv, deleteCv, getCv, getCvContent, listCvs, saveCvContent } from "./repo.js";
@@ -105,7 +105,7 @@ export function cvRoutes(app: FastifyInstance, sql: Sql): void {
       case "no-content":
         throw new HttpError(409, NO_CONTENT);
       case "job-active":
-        throw new HttpError(409, "Wait for the current update to finish.");
+        throw new HttpError(409, JOB_ACTIVE);
       case "stale":
         throw new HttpError(409, "This CV changed somewhere else. Reload to get the latest version.");
       default: {

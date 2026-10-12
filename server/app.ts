@@ -3,11 +3,12 @@ import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
+import postgres from "postgres";
 import { PDF_MAX_BYTES } from "../shared/api.js";
 import { authRoutes } from "./auth/routes.js";
 import { cvRoutes } from "./cvs/routes.js";
 import type { Sql } from "./db.js";
-import { HttpError } from "./http.js";
+import { HttpError, JOB_ACTIVE } from "./http.js";
 import { questionRoutes } from "./questions/routes.js";
 
 export async function buildApp(options: {
@@ -23,6 +24,9 @@ export async function buildApp(options: {
 
   app.setErrorHandler((err, request, reply) => {
     if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.message });
+    if (err instanceof postgres.PostgresError && err.constraint_name === "jobs_one_active_per_cv") {
+      return reply.code(409).send({ error: JOB_ACTIVE });
+    }
     const status = typeof err === "object" && err !== null && "statusCode" in err ? err.statusCode : undefined;
     if (typeof status === "number" && status >= 400 && status < 500) {
       return reply.code(status).send({ error: "Invalid request." });
