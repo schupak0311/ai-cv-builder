@@ -39,7 +39,7 @@ _Avoid_: response, reply
 - A **Source** belongs to exactly one **CV** and is never shared between CVs.
 - **Sources** and **CVs** are in English. Other languages are out of scope.
 - Every AI-written **Claim** has **Evidence** in its CV's **Source**. A **Claim** without matching **Evidence** is dropped from the **CV** without notice.
-- A **CV** has zero or more **Questions**. An **Answer** updates only the section its **Question** is about.
+- A **CV** has zero or more **Questions**. An **Answer** updates only the section its **Question** is about, and counts only once that section is revised. Until then the **Question** stays open.
 
 ## Example dialogue
 
