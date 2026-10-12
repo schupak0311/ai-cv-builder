@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import type { ActiveJob } from "../../../shared/api.js";
-import { api } from "../api.js";
+import { api, ApiError } from "../api.js";
 import { CvEditor } from "../components/CvEditor.js";
 import { QuestionsPanel } from "../components/QuestionsPanel.js";
 import { RetryJob } from "../components/RetryJob.js";
@@ -28,6 +28,16 @@ export function CvPage() {
   });
 
   if (cv.isPending) return <p>Loading…</p>;
+  if (cv.error instanceof ApiError && cv.error.status === 404) {
+    return (
+      <>
+        <h1>CV not found.</h1>
+        <Link to="/" className="button">
+          Back to your CVs
+        </Link>
+      </>
+    );
+  }
   if (cv.isLoadingError) {
     return (
       <>
