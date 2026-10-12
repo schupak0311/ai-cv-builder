@@ -49,7 +49,6 @@ async function runGenerate({ sql, llm }: WorkerDeps, job: ClaimedJob): Promise<v
   });
 }
 
-/** Runs one queued job if there is one. Returns whether a job was claimed. */
 export async function processNextJob(deps: WorkerDeps): Promise<boolean> {
   const job = await claimNextJob(deps.sql);
   if (job === null) return false;
@@ -77,7 +76,6 @@ export async function processNextJob(deps: WorkerDeps): Promise<boolean> {
   return true;
 }
 
-/** Runs jobs one at a time for the life of the process. */
 export async function runWorker(deps: WorkerDeps, idleMs = 1000): Promise<never> {
   for (;;) {
     let worked = false;

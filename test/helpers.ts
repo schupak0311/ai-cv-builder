@@ -4,7 +4,6 @@ import { buildApp } from "../server/app.js";
 import { connect } from "../server/db.js";
 import { testDatabaseUrl } from "./database.js";
 
-/** Gives each test a fresh, empty database and an app driven through `inject`. */
 export function useTestApp() {
   const sql = connect(testDatabaseUrl());
   const appPromise = buildApp({ sql });
