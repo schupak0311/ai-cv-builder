@@ -13,7 +13,7 @@ export class ApiError extends Error {
 
 const ErrorBody = z.object({ error: z.string() });
 
-async function request<T>(path: string, schema: z.ZodType<T>, init?: { method: string; body?: unknown }): Promise<T> {
+export async function request<T>(path: string, schema: z.ZodType<T>, init?: { method: string; body?: unknown }): Promise<T> {
   const body = init?.body;
   const res = await fetch(path, {
     method: init?.method ?? "GET",
