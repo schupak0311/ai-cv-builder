@@ -16,7 +16,7 @@ Rules:
 - Use null for any field the source does not state. Leave a list empty rather than guess.
 - When something a CV needs is missing or vague, ask a question instead of guessing: missing dates, missing contact details, a role with no employer, a bullet with no concrete outcome, an unclear level of responsibility. Tie each question to one section: contact, summary, experience, education or skills. Ask at most 8 questions, the most useful first, each short and specific enough to answer in one line.`;
 
-const TAGS = /<\s*(\/?)\s*(source_document|questions_and_answers|current_section)\s*>/gi;
+const TAGS = /<\s*(\/?)\s*(source_document|questions_and_answers|current_section)(?:\s[^>]*)?>/gi;
 
 /** Neutralises every delimiter inside untrusted text so each data block has exactly one end. */
 function escapeData(text: string): string {
