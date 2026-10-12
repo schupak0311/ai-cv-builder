@@ -12,7 +12,8 @@
     "start": "node dist/server/main.js",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:live": "tsx scripts/smoke-live.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.133.0",
