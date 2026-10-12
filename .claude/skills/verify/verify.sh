@@ -39,14 +39,16 @@ cmd_up() {
   local port
   port="$(published_port)"
   if [ -n "$port" ]; then
-    local running_delay
+    local running_delay running_mode
     running_delay="$(dc exec -T app printenv FAKE_LLM_DELAY_MS 2>/dev/null || true)"
-    if [ -z "${FAKE_LLM_DELAY_MS:-}" ] || [ "$FAKE_LLM_DELAY_MS" = "$running_delay" ]; then
-      echo "already up (project $PROJECT, FAKE_LLM_DELAY_MS=$running_delay)"
+    running_mode="$(dc exec -T app printenv LLM_MODE 2>/dev/null || true)"
+    FAKE_LLM_DELAY_MS="${FAKE_LLM_DELAY_MS:-${running_delay:-5000}}"
+    if [ "${LLM_MODE:-fake}" = "$running_mode" ] && [ "$FAKE_LLM_DELAY_MS" = "$running_delay" ]; then
+      echo "already up (project $PROJECT, LLM_MODE=$running_mode FAKE_LLM_DELAY_MS=$running_delay)"
       wait_ready "$port"
       return
     fi
-    echo "recreating app with FAKE_LLM_DELAY_MS=$FAKE_LLM_DELAY_MS (was $running_delay); data is kept"
+    echo "recreating app with LLM_MODE=${LLM_MODE:-fake} FAKE_LLM_DELAY_MS=$FAKE_LLM_DELAY_MS (was $running_mode, $running_delay); data is kept"
   else
     port="${PORT:-$(free_port 18080)}"
   fi
@@ -110,6 +112,13 @@ cmd_psql() {
   dc exec -T db psql -U cv -d cv -tA -c "$1"
 }
 
+cmd_node() {
+  local script="$1"
+  [ -f "$script" ] || { echo "usage: $0 node <script.mjs> [args...] < input" >&2; exit 2; }
+  shift
+  dc exec -T app node --input-type=module -e "$(cat "$script")" "$@"
+}
+
 cmd_down() {
   local dir="${1:-}"
   if [ -n "$dir" ]; then
@@ -132,9 +141,10 @@ case "${1:-}" in
   restart) cmd_restart ;;
   logs) shift; dc logs --no-color "$@" app ;;
   psql) shift; cmd_psql "$1" ;;
+  node) shift; cmd_node "$@" ;;
   down) shift; cmd_down "${1:-}" ;;
   *)
-    echo "usage: $0 up|doctor|port|url|evidence|grab <dir> <mcp-path> <name>|restart|logs [--tail N]|psql '<sql>'|down [evidence-dir]" >&2
+    echo "usage: $0 up|doctor|port|url|evidence|grab <dir> <mcp-path> <name>|restart|logs [--tail N]|psql '<sql>'|node <script.mjs> [args]|down [evidence-dir]" >&2
     exit 2
     ;;
 esac
