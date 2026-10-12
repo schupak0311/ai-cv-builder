@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useLayoutEffect, useRef, useState, type ComponentProps, type FormEvent } from "react";
 import {
   CV_EDIT_BULLET_MAX,
   CV_EDIT_LIST_MAX,
@@ -72,8 +72,7 @@ export function CvEditor({ id, initial, onReload }: { id: string; initial: CvDet
         <h2>Summary</h2>
         <label>
           <span className="sr-only">Summary</span>
-          <textarea
-            rows={5}
+          <GrowingTextarea
             maxLength={CV_EDIT_SUMMARY_MAX}
             value={draft.summary}
             onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
@@ -174,6 +173,22 @@ export function CvEditor({ id, initial, onReload }: { id: string; initial: CvDet
   );
 }
 
+function GrowingTextarea(props: ComponentProps<"textarea"> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const fit = () => {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [props.value]);
+  return <textarea ref={ref} rows={1} {...props} />;
+}
+
 function TextField({
   label,
   value,
@@ -224,7 +239,7 @@ function ListField({
         return (
           <div key={index} className="list-item">
             {multiline ? (
-              <textarea aria-label={name} rows={2} maxLength={maxLength} value={value} onChange={(e) => set(e.target.value)} />
+              <GrowingTextarea aria-label={name} maxLength={maxLength} value={value} onChange={(e) => set(e.target.value)} />
             ) : (
               <input aria-label={name} maxLength={maxLength} value={value} onChange={(e) => set(e.target.value)} />
             )}
