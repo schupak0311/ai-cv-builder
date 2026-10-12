@@ -1,0 +1,9 @@
+Anna Verifier
+anna.verifier@example.com
++44 20 7946 0958
+https://github.com/anna-verifier
+Backend engineer with eight years building payment APIs in TypeScript and Go.
+Led the migration of the ledger service from MySQL to Postgres with zero downtime.
+Cut p99 checkout latency from 900 ms to 180 ms by batching fraud checks.
+Mentored four junior engineers through their first on-call rotations.
+Skills: TypeScript, Go, Postgres, Kafka, AWS
