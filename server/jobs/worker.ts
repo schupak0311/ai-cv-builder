@@ -45,7 +45,7 @@ async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Prom
   `;
   if (cv === undefined) return;
   const draft = await llm.draft({ targetRole: cv.targetRole, source: cv.sourceText });
-  const checked = checkDraft(draft, { targetRole: cv.targetRole, texts: [cv.sourceText] });
+  const checked = checkDraft(draft, { texts: [cv.sourceText] });
   const claims = countClaims(draft);
   log.info({ jobId: job.id, claims, dropped: claims - countClaims(checked) }, "fact check");
   const { content, questions } = draftToCv(checked);

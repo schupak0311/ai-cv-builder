@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import type { CvDraft } from "../llm/llm.js";
 import { checkDraft, countClaims, normalise } from "./factcheck.js";
@@ -10,9 +11,11 @@ const SOURCE = [
   "Data Engineer at Brightwater Insurance, Jan 2018 to Mar 2021.",
   "Reduced cloud spend by 38% through “partition pruning”.",
   "BSc Computer Science, University of Leeds, 2011 to 2015.",
+  "Led a cross-",
+  "functional team on the metadata service.",
   "Skills: Python, SQL, Kafka",
 ].join("\n");
-const corpus = { targetRole: "Senior Data Engineer", texts: [SOURCE] };
+const corpus = { texts: [SOURCE] };
 
 const EMPTY: CvDraft = {
   contact: { name: null, email: null, phone: null, location: null, links: [] },
@@ -61,7 +64,7 @@ describe("checkDraft", () => {
       }),
     },
     {
-      name: "a number moved from one job to another is dropped",
+      name: "a number missing from the bullet's own evidence is dropped",
       input: draft({
         experience: [
           job({
@@ -177,22 +180,96 @@ describe("checkDraft", () => {
       }),
     },
     {
-      name: "the Target role is allowed in the summary but not in a bullet",
+      name: "a one-word quote is not evidence, even when the Source contains it",
       input: draft({
-        summary: [
-          { text: "Senior Data Engineer who builds Spark pipelines.", evidence: ["incremental Spark jobs"] },
-          { text: "Experienced at Brightwater Insurance and Acme.", evidence: ["Data Engineer at Brightwater Insurance"] },
-          { text: "Ready for a Senior Data Engineer role.", evidence: [] },
+        experience: [
+          job({
+            bullets: [
+              { text: "Cut cloud spend by 15%.", evidence: ["15"] },
+              { text: "Cut nightly load time.", evidence: ["a"] },
+              { text: "Cut cloud spend by 38%.", evidence: ["by 38%"] },
+            ],
+          }),
         ],
-        experience: [job({ bullets: [{ text: "Grew into a Data role on Spark.", evidence: ["incremental Spark jobs"] }] })],
+      }),
+      expected: draft({ experience: [job({ bullets: [{ text: "Cut cloud spend by 38%.", evidence: ["by 38%"] }] })] }),
+    },
+    {
+      name: "a quote glued inside a longer word is not evidence",
+      input: draft({
+        experience: [job({ employer: "Meta", evidence: ["the meta"] }), job({ employer: "Northwind Logistics" })],
+      }),
+      expected: draft({ experience: [job({ employer: "Northwind Logistics" })] }),
+    },
+    {
+      name: "a name after a colon, a name with a lowercase first letter and an acronym that starts a sentence are checked",
+      input: draft({
+        experience: [
+          job({
+            bullets: [
+              { text: "Stack: Airflow.", evidence: ["incremental Spark jobs"] },
+              { text: "Stack: Spark.", evidence: ["incremental Spark jobs"] },
+              { text: "Built iOS apps with Spark.", evidence: ["incremental Spark jobs"] },
+              { text: "AWS jobs on Spark.", evidence: ["incremental Spark jobs"] },
+              { text: "Built pipelines with Spark.", evidence: ["incremental Spark jobs"] },
+            ],
+          }),
+        ],
       }),
       expected: draft({
-        summary: [{ text: "Senior Data Engineer who builds Spark pipelines.", evidence: ["incremental Spark jobs"] }],
-        experience: [],
+        experience: [
+          job({
+            bullets: [
+              { text: "Stack: Spark.", evidence: ["incremental Spark jobs"] },
+              { text: "Built pipelines with Spark.", evidence: ["incremental Spark jobs"] },
+            ],
+          }),
+        ],
+      }),
+    },
+    {
+      name: "a spelled-out number counts as its digits in the Claim and in the evidence",
+      input: draft({
+        experience: [
+          job({
+            bullets: [
+              { text: "Mentored four engineers.", evidence: ["incremental Spark jobs"] },
+              { text: "Cut load time from six hours to 75 minutes.", evidence: ["from 6 hours to 75 minutes"] },
+            ],
+          }),
+        ],
+      }),
+      expected: draft({
+        experience: [
+          job({ bullets: [{ text: "Cut load time from six hours to 75 minutes.", evidence: ["from 6 hours to 75 minutes"] }] }),
+        ],
+      }),
+    },
+    {
+      name: "a hyphenated compound matches the Source when the Source breaks it across lines",
+      input: draft({
+        experience: [job({ bullets: [{ text: "Led a cross-functional team.", evidence: ["Led a cross-functional team"] }] })],
+      }),
+      expected: draft({
+        experience: [job({ bullets: [{ text: "Led a cross-functional team.", evidence: ["Led a cross-functional team"] }] })],
       }),
     },
   ])("$name", ({ input, expected }) => {
     expect(checkDraft(input, corpus)).toEqual(expected);
+  });
+
+  test("the summary may not claim the Target role as a title the Source does not give", () => {
+    const freetext = readFileSync(new URL("../../test/fixtures/freetext.txt", import.meta.url), "utf8");
+    const evidence = ["customer support stuff for like 5 years, mostly at a travel company called Sunpath Travel"];
+    const input = draft({
+      summary: [
+        { text: "Customer Success Manager with 5 years at Sunpath Travel.", evidence },
+        { text: "Customer support lead with 5 years at Sunpath Travel.", evidence },
+      ],
+    });
+    expect(checkDraft(input, { texts: [freetext] })).toEqual(
+      draft({ summary: [{ text: "Customer support lead with 5 years at Sunpath Travel.", evidence }] }),
+    );
   });
 
   test("Questions pass through and Answers count as corpus", () => {

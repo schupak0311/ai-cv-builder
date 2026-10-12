@@ -79,7 +79,7 @@ for (const sample of SAMPLES) {
   try {
     const { draft, usage } = await requestDraft(client, options, buildPrompt({ targetRole: sample.targetRole, source }));
     const seconds = ((performance.now() - started) / 1000).toFixed(1);
-    const checked = checkDraft(draft, { targetRole: sample.targetRole, texts: [source] });
+    const checked = checkDraft(draft, { texts: [source] });
     console.log(`latency ${seconds}s`);
     console.log(
       `usage input ${usage.input_tokens}, output ${usage.output_tokens}, thinking ${usage.output_tokens_details?.thinking_tokens ?? "n/a"}`,

@@ -1,7 +1,7 @@
 import type { CvDraft } from "../llm/llm.js";
 
 /** The text a draft may draw facts from: the Source, later joined by Answers. */
-export type Corpus = { targetRole: string; texts: string[] };
+export type Corpus = { texts: string[] };
 
 const QUOTES: [RegExp, string][] = [
   [/[‘’‚‛′`]/g, "'"],
@@ -12,12 +12,22 @@ const WORD = /[\p{L}\p{N}]+/gu;
 const NUMBER = /\d+(?:[.,]\d+)*/g;
 const TERM = /[\p{L}\p{N}][\p{L}\p{N}-]*/gu;
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const UPPERCASE = /\p{Lu}/u;
+const TITLE_CASE = /^\p{Lu}\p{Ll}*$/u;
+const NUMBER_WORDS = new Map(
+  Object.entries({
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+    eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
+    eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60,
+    seventy: 70, eighty: 80, ninety: 90, hundred: 100, thousand: 1000, million: 1000000, dozen: 12,
+  }).map(([word, n]) => [word, String(n)]),
+);
 
 export function normalise(text: string): string {
   let out = text.normalize("NFKC");
   for (const [pattern, replacement] of QUOTES) out = out.replace(pattern, replacement);
   return out
-    .replace(/(\p{L})-[ \t]*\r?\n\s*(\p{L})/gu, "$1$2")
+    .replace(/(\p{L})-\s*(?=\p{L})/gu, "$1")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
@@ -28,7 +38,8 @@ function words(normalised: string): Set<string> {
 }
 
 function numbers(normalised: string): string[] {
-  return normalised.match(NUMBER) ?? [];
+  const spelled = (normalised.match(WORD) ?? []).flatMap((w) => NUMBER_WORDS.get(w) ?? []);
+  return [...(normalised.match(NUMBER) ?? []), ...spelled];
 }
 
 /** True when `needle` occurs in `haystack` and is not glued to a letter or digit on either side. */
@@ -43,16 +54,15 @@ function containsPhrase(haystack: string, needle: string): boolean {
 }
 
 /**
- * Capitalised terms a reader takes as names: employers, products, places.
- * For a sentence the first word of each sentence is exempt, for a header field nothing is.
+ * Terms with an uppercase letter, which a reader takes as names: employers, products, places.
+ * In a sentence a plain title-case word that starts it is exempt, in a header field nothing is.
  */
 function capitalisedTerms(text: string, exemptSentenceStarts: boolean): string[] {
   const terms: string[] = [];
   for (const match of text.matchAll(TERM)) {
-    const first = match[0][0] ?? "";
-    if (first === first.toLowerCase()) continue;
-    const startsSentence = /(^|[.!?:]\s*)$/.test(text.slice(0, match.index).trimEnd());
-    if (exemptSentenceStarts && startsSentence) continue;
+    if (!UPPERCASE.test(match[0])) continue;
+    const startsSentence = /(^|[.!?])$/.test(text.slice(0, match.index).trimEnd());
+    if (exemptSentenceStarts && startsSentence && TITLE_CASE.test(match[0])) continue;
     terms.push(match[0]);
   }
   return terms;
@@ -62,31 +72,26 @@ type Evidence = { valid: boolean; words: Set<string>; numbers: Set<string> };
 
 export function checkDraft(draft: CvDraft, corpus: Corpus): CvDraft {
   const source = normalise(corpus.texts.join("\n"));
-  const roleWords = words(normalise(corpus.targetRole));
 
   function evidence(quotes: string[]): Evidence {
     const normalised = quotes.map(normalise);
     const joined = normalised.join(" ");
     return {
-      valid: normalised.length > 0 && normalised.every((q) => q.length > 0 && source.includes(q)),
+      valid: normalised.length > 0 && normalised.every((q) => words(q).size >= 2 && containsPhrase(source, q)),
       words: words(joined),
       numbers: new Set(numbers(joined)),
     };
   }
 
-  function holds(text: string, ev: Evidence, opts: { sentence: boolean; allowed?: Set<string> }): boolean {
+  function holds(text: string, ev: Evidence, sentence: boolean): boolean {
     if (!ev.valid) return false;
     if (!numbers(normalise(text)).every((n) => ev.numbers.has(n))) return false;
-    return capitalisedTerms(text, opts.sentence).every((term) =>
-      [...words(normalise(term))].every((w) => ev.words.has(w) || opts.allowed?.has(w) === true),
-    );
+    return capitalisedTerms(text, sentence).every((term) => [...words(normalise(term))].every((w) => ev.words.has(w)));
   }
 
-  const field = (value: string | null, ev: Evidence) =>
-    value !== null && holds(value, ev, { sentence: false }) ? value : null;
+  const field = (value: string | null, ev: Evidence) => (value !== null && holds(value, ev, false) ? value : null);
   const inSource = (value: string | null) => (value !== null && containsPhrase(source, normalise(value)) ? value : null);
-  const sentences = (items: CvDraft["summary"], allowed?: Set<string>) =>
-    items.filter((s) => holds(s.text, evidence(s.evidence), { sentence: true, ...(allowed && { allowed }) }));
+  const sentences = (items: CvDraft["summary"]) => items.filter((s) => holds(s.text, evidence(s.evidence), true));
 
   return {
     contact: {
@@ -96,7 +101,7 @@ export function checkDraft(draft: CvDraft, corpus: Corpus): CvDraft {
       location: inSource(draft.contact.location),
       links: draft.contact.links.filter((link) => inSource(link) !== null),
     },
-    summary: sentences(draft.summary, roleWords),
+    summary: sentences(draft.summary),
     experience: draft.experience
       .map((item) => {
         const ev = evidence(item.evidence);

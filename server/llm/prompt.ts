@@ -9,7 +9,7 @@ Rules:
 - Rephrase and restructure freely, but never add a fact. Every name, employer, title, place, date, number, degree, skill and contact detail must come from the source document.
 - Copy names, dates and numbers exactly as the source writes them. Do not reformat dates, round numbers or expand abbreviations.
 - Write experience as concise bullet points, one achievement or responsibility each.
-- Write the summary as a few short sentences aimed at the target role, using only facts from the source. You may name the target role itself.
+- Write the summary as a few short sentences aimed at the target role, using only facts from the source. Aim it at the role through what it emphasises. Never say or imply that the person holds the target title unless the source says so.
 - Order experience with the most relevant to the target role first.
 - Every summary sentence, every bullet, and every experience or education item carries "evidence": one or more passages copied character for character from the source document that support it. An experience or education item's evidence must contain its employer or institution, title or degree, and dates as written. Do not paraphrase evidence, do not join passages that are not adjacent, and do not include the tags.
 - Use null for any field the source does not state. Leave a list empty rather than guess.

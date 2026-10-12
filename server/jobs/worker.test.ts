@@ -71,7 +71,7 @@ describe("jobs", () => {
     expect(await processNextJob(await deps(fakeLlm))).toBe(false);
   });
 
-  test("invented Claims from the model never reach the stored CV", async () => {
+  test("an invented employer and an invented number from the model are dropped before the CV is stored", async () => {
     const app = await ctx.app();
     const cookie = await signUp(app, "anna@example.com");
     const id = await createCv(app, cookie);

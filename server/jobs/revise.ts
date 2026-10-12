@@ -14,9 +14,9 @@ function withSection(content: Cv, section: CvSection, from: Cv): Cv {
  * replaces a non-empty section, so a bad revision cannot wipe it.
  */
 export function applyRevision(input: ReviseInput, draft: CvDraft): Revision {
-  const { targetRole, source, section, content, answered } = input;
+  const { source, section, content, answered } = input;
   const current = sectionText(content, section);
-  const checked = checkDraft(draft, { targetRole, texts: [source, ...answered.map((q) => q.answer), current] });
+  const checked = checkDraft(draft, { texts: [source, ...answered.map((q) => q.answer), current] });
   const revised = draftToCv(checked).content;
   const keptCurrent = sectionText(revised, section).trim() === "" && current.trim() !== "";
   return {
