@@ -93,28 +93,3 @@ export function draftToCv(draft: CvDraft): { content: Cv; questions: DraftQuesti
     questions: draft.questions,
   };
 }
-
-/** One value per line, so evidence quoting any stored value is a substring of the corpus. */
-export function sectionText(cv: Cv, section: CvSection): string {
-  const lines = (values: (string | null)[]) => values.filter((v) => v !== null).join("\n");
-  switch (section) {
-    case "contact": {
-      const { name, email, phone, location, links } = cv.contact;
-      return lines([name, email, phone, location, ...links]);
-    }
-    case "summary":
-      return cv.summary;
-    case "experience":
-      return cv.experience
-        .map((e) => lines([e.employer, e.title, e.location, e.start, e.end, ...e.bullets]))
-        .join("\n");
-    case "education":
-      return cv.education.map((e) => lines([e.institution, e.degree, e.start, e.end])).join("\n");
-    case "skills":
-      return lines(cv.skills);
-    default: {
-      const _exhaustive: never = section;
-      return _exhaustive;
-    }
-  }
-}

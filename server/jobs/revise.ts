@@ -1,8 +1,18 @@
 import type { Cv, CvSection } from "../../shared/cv.js";
 import { checkDraft, countClaims } from "../factcheck/factcheck.js";
-import { draftToCv, sectionText, type CvDraft, type ReviseInput } from "../llm/llm.js";
+import { draftToCv, type CvDraft, type ReviseInput } from "../llm/llm.js";
+import { currentSectionBlock } from "../llm/prompt.js";
 
-export type Revision = { content: Cv; claims: number; kept: number; keptCurrent: boolean };
+/** `content` is null when nothing in the revised section survived the fact check. */
+export type Revision = { content: Cv | null; claims: number; kept: number };
+
+const EMPTY: Cv = {
+  contact: { name: null, email: null, phone: null, location: null, links: [] },
+  summary: "",
+  experience: [],
+  education: [],
+  skills: [],
+};
 
 function withSection(content: Cv, section: CvSection, from: Cv): Cv {
   return { ...content, [section]: from[section] };
@@ -10,19 +20,16 @@ function withSection(content: Cv, section: CvSection, from: Cv): Cv {
 
 /**
  * Fact-checks a revision and swaps only `section` into the content. The corpus adds the current
- * section text because it is either already checked or typed by the user. An empty result never
- * replaces a non-empty section, so a bad revision cannot wipe it.
+ * section because it is either already checked or typed by the user.
  */
 export function applyRevision(input: ReviseInput, draft: CvDraft): Revision {
   const { source, section, content, answered } = input;
-  const current = sectionText(content, section);
-  const checked = checkDraft(draft, { texts: [source, ...answered.map((q) => q.answer), current] });
+  const checked = checkDraft(draft, { texts: [source, ...answered.map((q) => q.answer), currentSectionBlock(content, section)] });
   const revised = draftToCv(checked).content;
-  const keptCurrent = sectionText(revised, section).trim() === "" && current.trim() !== "";
+  const empty = JSON.stringify(revised[section]) === JSON.stringify(EMPTY[section]);
   return {
-    content: keptCurrent ? content : withSection(content, section, revised),
+    content: empty ? null : withSection(content, section, revised),
     claims: countClaims(draft),
     kept: countClaims(checked),
-    keptCurrent,
   };
 }

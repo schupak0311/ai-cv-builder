@@ -9,11 +9,12 @@ import { applyRevision } from "./revise.js";
 
 export const MAX_ATTEMPTS = 3;
 const GENERIC_ERROR = "Something went wrong while drafting this CV. Try again.";
+const UNUSABLE_ANSWER = "Claude could not use this answer. Try again, or edit the section by hand.";
 
 type JobKind = "generate" | "revise";
 type ClaimedJob = { id: string; cvId: string; kind: JobKind; payload: unknown; attempts: number };
 
-const RevisePayload = z.object({ questionId: z.uuid() });
+const RevisePayload = z.object({ questionId: z.uuid(), answer: z.string() });
 
 export type WorkerDeps = { sql: Sql; llm: Llm; log: FastifyBaseLogger };
 
@@ -61,31 +62,34 @@ async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Prom
 }
 
 async function runRevise({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Promise<void> {
-  const { questionId } = RevisePayload.parse(job.payload);
+  const { questionId, answer } = RevisePayload.parse(job.payload);
   const [cv] = await sql<{ targetRole: string; sourceText: string; content: Cv | null }[]>`
     select target_role, source_text, content from cvs where id = ${job.cvId}
   `;
-  const [question] = await sql<{ section: CvSection }[]>`
-    select section from questions where id = ${questionId} and cv_id = ${job.cvId}
+  const [question] = await sql<{ section: CvSection; text: string }[]>`
+    select section, text from questions where id = ${questionId} and cv_id = ${job.cvId}
   `;
   if (cv?.content == null || question === undefined) throw new Error("Revise job has no CV content or Question");
-  const answered = await sql<AnsweredQuestion[]>`
+  const stored = await sql<AnsweredQuestion[]>`
     select section, text, answer from questions
     where cv_id = ${job.cvId} and answer is not null
     order by answered_at, id
   `;
+  const answered = [...stored, { section: question.section, text: question.text, answer }];
   const input = { targetRole: cv.targetRole, source: cv.sourceText, section: question.section, content: cv.content, answered };
   const revision = applyRevision(input, await llm.revise(input));
   log.info(
     { jobId: job.id, section: question.section, claims: revision.claims, dropped: revision.claims - revision.kept },
     "fact check",
   );
-  if (revision.keptCurrent) log.warn({ jobId: job.id, section: question.section }, "revision came back empty, kept the current section");
+  const { content } = revision;
+  if (content === null) throw new LlmError(UNUSABLE_ANSWER, false);
   await sql.begin(async (tx) => {
     await tx`
-      update cvs set content = ${tx.json(revision.content)}, version = version + 1, updated_at = now()
+      update cvs set content = ${tx.json(content)}, version = version + 1, updated_at = now()
       where id = ${job.cvId}
     `;
+    await tx`update questions set answer = ${answer}, answered_at = now() where id = ${questionId}`;
     await tx`update jobs set status = 'done', error = null, updated_at = now() where id = ${job.id}`;
   });
 }

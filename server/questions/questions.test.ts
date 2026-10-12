@@ -88,9 +88,10 @@ describe("answering a Question", () => {
     const queued = await detail(app, cookie, id);
     expect(queued.job?.status).toBe("queued");
     expect(queued.version).toBe(2);
+    expect(queued.questions.map((q) => q.answer)).toEqual([null]);
     expect(await jobs()).toEqual([
       { kind: "generate", payload: {}, status: "done" },
-      { kind: "revise", payload: { questionId }, status: "queued" },
+      { kind: "revise", payload: { questionId, answer: ANSWER }, status: "queued" },
     ]);
 
     expect(await run(fakeLlm)).toBe(true);
@@ -131,7 +132,47 @@ describe("answering a Question", () => {
     });
   });
 
-  test("a revision that comes back empty after the fact check keeps the current section", async () => {
+  test("revises the experience section from evidence quoted out of the current section", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const { id } = await doneCv(app, cookie);
+    await ctx.sql`update cvs set content = jsonb_set(content, '{experience,0,employer}', '"Paylane"') where id = ${id}`;
+    const [question] = await ctx.sql<{ id: string }[]>`
+      insert into questions (cv_id, section, text) values (${id}, 'experience', 'What was your title at Paylane?') returning id
+    `;
+    if (question === undefined) throw new Error("Insert returned no Question");
+    const fromAnswer = "I was a Backend Engineer there from 2019 to 2024.";
+    expect((await answer(app, cookie, id, question.id, fromAnswer)).statusCode).toBe(202);
+
+    const bullets = OTHER_SECTIONS.experience[0]!.bullets;
+    await run(
+      scripted({
+        ...EMPTY,
+        experience: [
+          {
+            employer: "Paylane",
+            title: "Backend Engineer",
+            location: null,
+            start: "2019",
+            end: "2024",
+            bullets: bullets.map((text) => ({ text, evidence: [text] })),
+            evidence: ['"employer": "Paylane"', fromAnswer],
+          },
+        ],
+      }),
+    );
+
+    const cv = await detail(app, cookie, id);
+    expect(cv.error).toBeNull();
+    expect(cv.content).toEqual({
+      ...OTHER_SECTIONS,
+      summary: SUMMARY,
+      experience: [{ id: "exp-1", employer: "Paylane", title: "Backend Engineer", location: null, start: "2019", end: "2024", bullets }],
+    });
+    expect(cv.questions.map((q) => q.answer)).toEqual([null, fromAnswer]);
+  });
+
+  test("a revision that comes back empty after the fact check fails and leaves the Question open", async () => {
     const app = await ctx.app();
     const cookie = await signUp(app, "anna@example.com");
     const { id, questionId } = await doneCv(app, cookie);
@@ -141,8 +182,41 @@ describe("answering a Question", () => {
 
     const cv = await detail(app, cookie, id);
     expect(cv.job).toBeNull();
-    expect(cv.error).toBeNull();
+    expect(cv.error).toBe("Claude could not use this answer. Try again, or edit the section by hand.");
+    expect(cv.version).toBe(2);
     expect(cv.content).toEqual({ ...OTHER_SECTIONS, summary: SUMMARY });
+    expect(cv.questions.map((q) => q.answer)).toEqual([null]);
+    expect((await answer(app, cookie, id, questionId, ANSWER)).statusCode).toBe(202);
+  });
+
+  test("a failed revise leaves its Question open after another Question is answered", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const { id, questionId } = await doneCv(app, cookie);
+    const [skills] = await ctx.sql<{ id: string }[]>`
+      insert into questions (cv_id, section, text) values (${id}, 'skills', 'Which tools do you use?') returning id
+    `;
+    if (skills === undefined) throw new Error("Insert returned no Question");
+
+    expect((await answer(app, cookie, id, questionId, ANSWER)).statusCode).toBe(202);
+    const refusing = new LlmError("Claude declined to process this CV.", false);
+    await run({ draft: () => Promise.reject(refusing), revise: () => Promise.reject(refusing) });
+    expect((await answer(app, cookie, id, skills.id, "Docker and Grafana.")).statusCode).toBe(202);
+    await run(scripted({ ...EMPTY, skills: ["TypeScript", "PostgreSQL", "Kafka", "Docker", "Grafana"] }));
+
+    const afterSkills = await detail(app, cookie, id);
+    expect(afterSkills.error).toBeNull();
+    expect(afterSkills.questions.map((q) => q.answer)).toEqual([null, "Docker and Grafana."]);
+
+    expect((await answer(app, cookie, id, questionId, ANSWER)).statusCode).toBe(202);
+    await run(fakeLlm);
+    const cv = await detail(app, cookie, id);
+    expect(cv.content).toEqual({
+      ...OTHER_SECTIONS,
+      skills: ["TypeScript", "PostgreSQL", "Kafka", "Docker", "Grafana"],
+      summary: `${SUMMARY} ${ANSWER}`,
+    });
+    expect(cv.questions.map((q) => q.answer)).toEqual([ANSWER, "Docker and Grafana."]);
   });
 
   test("is rejected for a foreign CV, a foreign Question, a busy CV and a second answer, storing nothing", async () => {
@@ -185,7 +259,7 @@ describe("answering a Question", () => {
     expect(await jobs()).toEqual([
       { kind: "generate", payload: {}, status: "done" },
       { kind: "generate", payload: {}, status: "done" },
-      { kind: "revise", payload: { questionId: first.questionId }, status: "done" },
+      { kind: "revise", payload: { questionId: first.questionId, answer: ANSWER }, status: "done" },
     ]);
   });
 });
@@ -198,7 +272,9 @@ describe("retrying a job", () => {
     expect((await answer(app, anna, id, questionId, ANSWER)).statusCode).toBe(202);
     const refusing = new LlmError("Claude declined to process this CV.", false);
     await run({ draft: () => Promise.reject(refusing), revise: () => Promise.reject(refusing) });
-    expect((await detail(app, anna, id)).error).toBe("Claude declined to process this CV.");
+    const failed = await detail(app, anna, id);
+    expect(failed.error).toBe("Claude declined to process this CV.");
+    expect(failed.questions.map((q) => q.answer)).toEqual([null]);
 
     const bob = await signUp(app, "bob@example.com");
     const foreign = await app.inject({ method: "POST", url: `/api/cvs/${id}/retry`, headers: { cookie: bob } });
@@ -209,12 +285,14 @@ describe("retrying a job", () => {
     expect(retry.statusCode).toBe(202);
     expect(await jobs()).toEqual([
       { kind: "generate", payload: {}, status: "done" },
-      { kind: "revise", payload: { questionId }, status: "failed" },
-      { kind: "revise", payload: { questionId }, status: "queued" },
+      { kind: "revise", payload: { questionId, answer: ANSWER }, status: "failed" },
+      { kind: "revise", payload: { questionId, answer: ANSWER }, status: "queued" },
     ]);
 
     await run(fakeLlm);
-    expect((await detail(app, anna, id)).content?.summary).toBe(`${SUMMARY} ${ANSWER}`);
+    const revised = await detail(app, anna, id);
+    expect(revised.content?.summary).toBe(`${SUMMARY} ${ANSWER}`);
+    expect(revised.questions.map((q) => q.answer)).toEqual([ANSWER]);
 
     const nothing = await app.inject({ method: "POST", url: `/api/cvs/${id}/retry`, headers: { cookie: anna } });
     expect(nothing.statusCode).toBe(409);

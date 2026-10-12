@@ -1,3 +1,4 @@
+import type { Cv, CvSection } from "../../shared/cv.js";
 import type { ReviseInput } from "./llm.js";
 
 const SYSTEM = `You turn a person's own material into an English CV draft for one target role.
@@ -38,6 +39,11 @@ This request revises one section of an existing CV. Besides the source document,
 
 Rewrite only the section named in the request, keeping its current facts and adding what the answers say. Return every other section empty: null contact fields, no links, and empty summary, experience, education and skills lists. Ask no questions: return an empty questions list.`;
 
+/** The section as the model sees it, which is also what its evidence may quote. */
+export function currentSectionBlock(content: Cv, section: CvSection): string {
+  return escapeData(JSON.stringify(content[section], null, 2));
+}
+
 export function buildRevisePrompt({ targetRole, source, section, content, answered }: ReviseInput): {
   system: string;
   user: string;
@@ -57,7 +63,7 @@ export function buildRevisePrompt({ targetRole, source, section, content, answer
       "</questions_and_answers>",
       "",
       "<current_section>",
-      escapeData(JSON.stringify(content[section], null, 2)),
+      currentSectionBlock(content, section),
       "</current_section>",
       "",
       `Rewrite the ${section} section of the CV for the target role.`,

@@ -23,10 +23,9 @@ export async function answerQuestion(
     if (!row.hasContent) return "no-content";
     if (row.busy) return "busy";
     if (row.answer !== null) return "already-answered";
-    await tx`update questions set answer = ${input.answer}, answered_at = now() where id = ${input.questionId}`;
     await tx`
       insert into jobs (cv_id, kind, payload, status)
-      values (${input.cvId}, 'revise', ${tx.json({ questionId: input.questionId })}, 'queued')
+      values (${input.cvId}, 'revise', ${tx.json({ questionId: input.questionId, answer: input.answer })}, 'queued')
     `;
     return "queued";
   });

@@ -3,7 +3,7 @@ import { CvSection } from "../shared/cv.js";
 import { checkDraft, countClaims } from "../server/factcheck/factcheck.js";
 import { applyRevision } from "../server/jobs/revise.js";
 import { createClaudeClient, requestDraft, type ClaudeOptions } from "../server/llm/claude.js";
-import { draftToCv, sectionText, type CvDraft, type ReviseInput } from "../server/llm/llm.js";
+import { draftToCv, type CvDraft, type ReviseInput } from "../server/llm/llm.js";
 import { buildPrompt, buildRevisePrompt } from "../server/llm/prompt.js";
 
 const SAMPLES = [
@@ -55,13 +55,18 @@ async function smokeRevise(targetRole: string, source: string, checked: CvDraft)
     const { draft } = await requestDraft(client, options, buildRevisePrompt(input));
     const revision = applyRevision(input, draft);
     console.log(`latency ${((performance.now() - started) / 1000).toFixed(1)}s`);
-    console.log(`claims returned ${revision.claims}, kept ${revision.kept}, kept current section ${revision.keptCurrent ? "YES" : "no"}`);
-    const revisedText = sectionText(revision.content, question.section);
+    console.log(`claims returned ${revision.claims}, kept ${revision.kept}`);
+    if (revision.content === null) {
+      console.log(`revised ${question.section} came back empty`);
+      return false;
+    }
+    const revised = revision.content;
+    const revisedText = JSON.stringify(revised[question.section], null, 2);
     console.log(`revised ${question.section}:\n${revisedText}`);
     const reached = facts.filter((fact) => revisedText.includes(fact));
     console.log(`answer facts in ${question.section}: ${reached.length} of ${facts.length} (${reached.join(", ") || "none"})`);
     const changed = CvSection.options.filter(
-      (s) => s !== question.section && JSON.stringify(content[s]) !== JSON.stringify(revision.content[s]),
+      (s) => s !== question.section && JSON.stringify(content[s]) !== JSON.stringify(revised[s]),
     );
     console.log(`other sections changed: ${changed.length === 0 ? "none" : changed.join(", ")}`);
     return reached.length === facts.length && changed.length === 0;
