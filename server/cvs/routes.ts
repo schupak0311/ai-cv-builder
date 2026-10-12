@@ -15,8 +15,9 @@ import { Cv } from "../../shared/cv.js";
 import { requireUser } from "../auth/sessions.js";
 import type { Sql } from "../db.js";
 import { HttpError, parseBody } from "../http.js";
+import { renderCvPdf } from "../export/pdf.js";
 import { pdfToSource } from "../ingest/pdf.js";
-import { createCv, deleteCv, getCv, listCvs, saveCvContent } from "./repo.js";
+import { createCv, deleteCv, getCv, getCvContent, listCvs, saveCvContent } from "./repo.js";
 
 const TargetRole = z
   .string()
@@ -107,6 +108,14 @@ const EditedCv = Cv.extend({
 
 const SaveCvBody = z.object({ content: EditedCv, version: z.number().int() });
 
+function contentDisposition(cv: Cv): string {
+  const name = cv.contact.name?.trim();
+  const filename = name ? `${name} CV.pdf` : "CV.pdf";
+  const ascii = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const encoded = encodeURIComponent(filename).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 function cvIdParam(request: FastifyRequest): string {
   const parsed = z.object({ id: z.uuid() }).safeParse(request.params);
   if (!parsed.success) throw new HttpError(404, CV_NOT_FOUND);
@@ -156,6 +165,18 @@ export function cvRoutes(app: FastifyInstance, sql: Sql): void {
         return _exhaustive;
       }
     }
+  });
+
+  app.get("/api/cvs/:id/pdf", async (request, reply) => {
+    const user = await requireUser(sql, request);
+    const cv = await getCvContent(sql, user.id, cvIdParam(request));
+    if (cv === null) throw new HttpError(404, CV_NOT_FOUND);
+    if (cv.content === null) throw new HttpError(409, NO_CONTENT);
+    const pdf = await renderCvPdf(cv.content);
+    return reply
+      .header("content-type", "application/pdf")
+      .header("content-disposition", contentDisposition(cv.content))
+      .send(pdf);
   });
 
   app.delete("/api/cvs/:id", async (request, reply) => {

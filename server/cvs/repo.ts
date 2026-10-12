@@ -124,3 +124,14 @@ export async function saveCvContent(
   if (!cv.hasContent) return { kind: "no-content" };
   return { kind: "stale" };
 }
+
+export async function getCvContent(
+  sql: Sql,
+  ownerId: UserId,
+  id: string,
+): Promise<{ content: Cv | null; targetRole: string } | null> {
+  const [cv] = await sql<{ content: Cv | null; targetRole: string }[]>`
+    select content, target_role from cvs where id = ${id} and owner_id = ${ownerId}
+  `;
+  return cv ?? null;
+}
