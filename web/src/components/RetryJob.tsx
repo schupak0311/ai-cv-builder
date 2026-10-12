@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { questionsApi } from "../questionsApi.js";
+import { SAVE_FIRST } from "./QuestionsPanel.js";
 
-export function RetryJob({ cvId }: { cvId: string }) {
+export function RetryJob({ cvId, blocked }: { cvId: string; blocked: boolean }) {
   const queryClient = useQueryClient();
   const retry = useMutation({
     mutationFn: () => questionsApi.retry(cvId),
@@ -9,9 +10,10 @@ export function RetryJob({ cvId }: { cvId: string }) {
   });
   return (
     <>
-      <button type="button" disabled={retry.isPending} onClick={() => retry.mutate()}>
+      <button type="button" disabled={blocked || retry.isPending} onClick={() => retry.mutate()}>
         Try again
       </button>
+      {blocked && <p className="muted">{SAVE_FIRST}</p>}
       {retry.isError && (
         <p className="error" role="alert">
           {retry.error.message}

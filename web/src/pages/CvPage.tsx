@@ -19,6 +19,7 @@ export function CvPage() {
     refetchInterval: (query) => (query.state.data?.job ? POLL_MS : false),
   });
   const [loads, setLoads] = useState(0);
+  const [editing, setEditing] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.deleteCv(id),
     onSuccess: () => {
@@ -80,13 +81,19 @@ export function CvPage() {
       {job === null && error !== null && (
         <div className="job-failed">
           <p className="error">{error}</p>
-          <RetryJob cvId={id} />
+          <RetryJob cvId={id} blocked={editing} />
         </div>
       )}
       {job === null && content !== null && (
         <>
-          <QuestionsPanel cv={detail} />
-          <CvEditor key={loads} id={id} initial={{ ...detail, content }} onReload={() => void reload()} />
+          <QuestionsPanel cv={detail} blocked={editing} />
+          <CvEditor
+            key={loads}
+            id={id}
+            initial={{ ...detail, content }}
+            onReload={() => void reload()}
+            onDirtyChange={setEditing}
+          />
         </>
       )}
     </>

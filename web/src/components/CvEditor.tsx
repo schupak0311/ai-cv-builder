@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLayoutEffect, useRef, useState, type ComponentProps, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type FormEvent } from "react";
 import type { CvDetail } from "../../../shared/api.js";
 import { CV_EDIT_BULLET_MAX, CV_EDIT_LIST_MAX, CV_EDIT_SHORT_MAX, CV_EDIT_SUMMARY_MAX, type Cv } from "../../../shared/cv.js";
 import { api, ApiError } from "../api.js";
@@ -19,11 +19,25 @@ function removeAt<T>(items: T[], index: number): T[] {
   return items.filter((_, i) => i !== index);
 }
 
-export function CvEditor({ id, initial, onReload }: { id: string; initial: CvDetail & { content: Cv }; onReload: () => void }) {
+export function CvEditor({
+  id,
+  initial,
+  onReload,
+  onDirtyChange,
+}: {
+  id: string;
+  initial: CvDetail & { content: Cv };
+  onReload: () => void;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Cv>(initial.content);
   const [saved, setSaved] = useState({ content: initial.content, version: initial.version });
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved.content);
+  useEffect(() => {
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
   const save = useMutation({
     mutationFn: (content: Cv) => api.saveCv(id, { content, version: saved.version }),
     onSuccess: ({ version }, content) => {

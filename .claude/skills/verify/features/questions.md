@@ -8,6 +8,7 @@ A drafted CV comes with Questions about gaps the draft could not fill from the S
 - `questions-answer` queues a revise job and shows `Updating your CV` in the progress panel.
 - `questions-land` puts the Answer into its section and lists the Question under `Answered` with its Answer.
 - `questions-once` refuses a second Answer with `This question already has an answer.`.
+- `questions-dirty` disables `Answer` and shows `Save or discard your edits before answering a question.` while the editor has unsaved changes.
 
 ## How to get to it (user POV)
 
@@ -19,9 +20,10 @@ Preconditions:
 
 - Baseline preconditions from the README hold, and the browser is signed in.
 - A drafted CV `<id>` with target role `Senior Backend Engineer` from the fixture Source, and the second-client jar `$EV/a.jar` from `edit-cv.md`.
-- Save or discard any edit first. The panel says `Save any unsaved edits first.`, because the revised CV replaces the editor's draft.
+- Save or discard any edit first. While the editor has unsaved changes every `Answer` button and a failed job's `Try again` are disabled, and the panel note reads `Save or discard your edits before answering a question.`, because the revised CV replaces the editor's draft.
 
-- **Panel.** `role=region[name="Questions"]` has heading `Questions`, the note `Answering a question rewrites that section of your CV. Save any unsaved edits first.`, an `h3` `Summary`, and the textbox `What makes you a strong fit for the Senior Backend Engineer role?` with a disabled `Answer` button.
+- **Panel.** `role=region[name="Questions"]` has heading `Questions`, the note `Answering a question rewrites that section of your CV.`, an `h3` `Summary`, and the textbox `What makes you a strong fit for the Senior Backend Engineer role?` with a disabled `Answer` button.
+- **Dirty.** Type into `role=textbox[name="Phone"]` without saving. The note reads `Save or discard your edits before answering a question.` and `Answer` stays disabled after you type an answer. Restore the field so `Save` is disabled again, and the note returns.
 - **Answer.** `browser_fill_form` that textbox with `I have run payment systems at scale for eight years.`, then `browser_click` `role=button[name="Answer"]`. `browser_wait_for` text `Updating your CV`. The editor and the panel are gone and the `status` reads `Updating your CV · <n> s` (or `Waiting to start` for up to 1 s). Screenshot.
 - **Land.** `browser_wait_for` text `Answered`, repeated until it succeeds. The panel shows `Answered` with `Summary · What makes you a strong fit for the Senior Backend Engineer role?` and the Answer. `browser_evaluate` `() => document.querySelector('textarea[aria-label="Summary"]').value` ends with ` I have run payment systems at scale for eight years.`. Screenshot and `browser_snapshot`.
 - **Side effect.** `"$V" psql "select kind, status, attempts from jobs where cv_id='<id>' order by created_at"` prints `generate|done|1` and `revise|done|1`. `curl -s -b "$EV/a.jar" $B/api/cvs/<id> | jq -c '{version, questions}'` shows the Answer on the Question and the version bumped by 1.

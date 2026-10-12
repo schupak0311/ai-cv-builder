@@ -15,7 +15,9 @@ const SECTION_LABELS: Record<CvSection, string> = {
   skills: "Skills",
 };
 
-export function QuestionsPanel({ cv }: { cv: CvDetail }) {
+export const SAVE_FIRST = "Save or discard your edits before answering a question.";
+
+export function QuestionsPanel({ cv, blocked }: { cv: CvDetail; blocked: boolean }) {
   if (cv.questions.length === 0) return null;
   const open = cv.questions.filter((q) => q.answer === null);
   const answered = cv.questions.filter((q) => q.answer !== null);
@@ -23,11 +25,7 @@ export function QuestionsPanel({ cv }: { cv: CvDetail }) {
   return (
     <section className="questions" aria-labelledby="questions-title">
       <h2 id="questions-title">Questions</h2>
-      {open.length > 0 && (
-        <p className="muted">
-          Answering a question rewrites that section of your CV. Save any unsaved edits first.
-        </p>
-      )}
+      {open.length > 0 && <p className="muted">{blocked ? SAVE_FIRST : "Answering a question rewrites that section of your CV."}</p>}
       {CvSection.options.map((section) => {
         const inSection = open.filter((q) => q.section === section);
         if (inSection.length === 0) return null;
@@ -35,7 +33,7 @@ export function QuestionsPanel({ cv }: { cv: CvDetail }) {
           <div key={section} className="questions-group">
             <h3>{SECTION_LABELS[section]}</h3>
             {inSection.map((q) => (
-              <AnswerForm key={q.id} cvId={cv.id} question={q} />
+              <AnswerForm key={q.id} cvId={cv.id} question={q} blocked={blocked} />
             ))}
           </div>
         );
@@ -59,7 +57,7 @@ export function QuestionsPanel({ cv }: { cv: CvDetail }) {
   );
 }
 
-function AnswerForm({ cvId, question }: { cvId: string; question: Question }) {
+function AnswerForm({ cvId, question, blocked }: { cvId: string; question: Question; blocked: boolean }) {
   const queryClient = useQueryClient();
   const [answer, setAnswer] = useState("");
   const submit = useMutation({
@@ -89,7 +87,7 @@ function AnswerForm({ cvId, question }: { cvId: string; question: Question }) {
           {submit.error.message}
         </p>
       )}
-      <button type="submit" disabled={submit.isPending || answer.trim().length === 0}>
+      <button type="submit" disabled={blocked || submit.isPending || answer.trim().length === 0}>
         {submit.isPending ? "Sending…" : "Answer"}
       </button>
     </form>
