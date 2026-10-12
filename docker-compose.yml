@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: cv
+      POSTGRES_PASSWORD: cv
+      POSTGRES_DB: cv
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cv -d cv"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: postgres://cv:cv@db:5432/cv
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODE: ${LLM_MODE:-real}
+      FAKE_LLM_DELAY_MS: ${FAKE_LLM_DELAY_MS:-3000}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  test-db:
+    image: postgres:17
+    profiles: [test]
+    environment:
+      POSTGRES_USER: cv
+      POSTGRES_PASSWORD: cv
+      POSTGRES_DB: cv_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cv -d cv_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  test:
+    build:
+      context: .
+      target: build
+    profiles: [test]
+    command: ["npm", "test"]
+    environment:
+      DATABASE_URL: postgres://cv:cv@test-db:5432/cv_test
+    depends_on:
+      test-db:
+        condition: service_healthy
+
+volumes:
+  db-data:
