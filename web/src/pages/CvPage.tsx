@@ -28,7 +28,16 @@ export function CvPage() {
   });
 
   if (cv.isPending) return <p>Loading…</p>;
-  if (cv.isError) return <p className="error">{cv.error.message}</p>;
+  if (cv.isLoadingError) {
+    return (
+      <>
+        <p className="error">{cv.error.message}</p>
+        <button type="button" disabled={cv.isFetching} onClick={() => void cv.refetch()}>
+          Try again
+        </button>
+      </>
+    );
+  }
   const detail = cv.data;
   const { targetRole, job, error, content } = detail;
 
@@ -53,6 +62,11 @@ export function CvPage() {
         </button>
       </div>
       {job !== null && <JobProgress job={job} />}
+      {job !== null && cv.isRefetchError && (
+        <p className="error" role="alert">
+          Lost contact with the server. Reconnecting…
+        </p>
+      )}
       {job === null && error !== null && (
         <div className="job-failed">
           <p className="error">{error}</p>
