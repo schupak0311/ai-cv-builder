@@ -234,6 +234,7 @@ describe("checkDraft", () => {
           job({
             bullets: [
               { text: "Mentored four engineers.", evidence: ["incremental Spark jobs"] },
+              { text: "Mentored twenty-five engineers.", evidence: ["incremental Spark jobs"] },
               { text: "Cut load time from six hours to 75 minutes.", evidence: ["from 6 hours to 75 minutes"] },
             ],
           }),
