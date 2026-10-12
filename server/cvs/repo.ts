@@ -41,6 +41,13 @@ export async function createCv(
 }
 
 export async function getCv(sql: Sql, ownerId: UserId, id: string): Promise<CvDetail | null> {
+  // Read before the content: a job that finishes in between then shows as still running for one
+  // more poll, instead of leaving no content and no job, which would stop the page polling.
+  const [latestJob] = await sql<
+    { id: string; kind: JobKind; status: JobStatus; error: string | null; createdAt: Date }[]
+  >`
+    select id, kind, status, error, created_at from jobs where cv_id = ${id} order by created_at desc limit 1
+  `;
   const [cv] = await sql<
     { id: string; targetRole: string; content: Cv | null; version: number; createdAt: Date; updatedAt: Date }[]
   >`
@@ -48,11 +55,6 @@ export async function getCv(sql: Sql, ownerId: UserId, id: string): Promise<CvDe
     from cvs where id = ${id} and owner_id = ${ownerId}
   `;
   if (cv === undefined) return null;
-  const [latestJob] = await sql<
-    { id: string; kind: JobKind; status: JobStatus; error: string | null; createdAt: Date }[]
-  >`
-    select id, kind, status, error, created_at from jobs where cv_id = ${id} order by created_at desc limit 1
-  `;
   const questions = await sql<
     { id: string; section: CvSection; text: string; answer: string | null }[]
   >`
