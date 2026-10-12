@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { CvDetail, CvSummary, Me } from "../../shared/api.js";
+import { CvDetail, CvSummary, Me, SavedCv } from "../../shared/api.js";
+import type { Cv } from "../../shared/cv.js";
 
 export class ApiError extends Error {
   constructor(
@@ -51,5 +52,8 @@ export const api = {
     body.append("file", file);
     return request("/api/cvs", Created, { method: "POST", body });
   },
+  saveCv: (id: string, body: { content: Cv; version: number }) =>
+    request(`/api/cvs/${encodeURIComponent(id)}`, SavedCv, { method: "PUT", body }),
+  pdfUrl: (id: string) => `/api/cvs/${encodeURIComponent(id)}/pdf`,
   deleteCv: (id: string) => request(`/api/cvs/${encodeURIComponent(id)}`, z.null(), { method: "DELETE" }),
 };
