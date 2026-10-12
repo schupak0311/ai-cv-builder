@@ -4,6 +4,8 @@ import { useNavigate, useParams } from "react-router";
 import type { ActiveJob } from "../../../shared/api.js";
 import { api } from "../api.js";
 import { CvEditor } from "../components/CvEditor.js";
+import { QuestionsPanel } from "../components/QuestionsPanel.js";
+import { RetryJob } from "../components/RetryJob.js";
 
 const POLL_MS = 2000;
 
@@ -51,9 +53,17 @@ export function CvPage() {
         </button>
       </div>
       {job !== null && <JobProgress job={job} />}
-      {job === null && error !== null && <p className="error">{error}</p>}
+      {job === null && error !== null && (
+        <div className="job-failed">
+          <p className="error">{error}</p>
+          <RetryJob cvId={id} />
+        </div>
+      )}
       {job === null && content !== null && (
-        <CvEditor key={loads} id={id} initial={{ ...detail, content }} onReload={() => void reload()} />
+        <>
+          <QuestionsPanel cv={detail} />
+          <CvEditor key={loads} id={id} initial={{ ...detail, content }} onReload={() => void reload()} />
+        </>
       )}
     </>
   );

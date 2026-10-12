@@ -332,3 +332,15 @@ button.remove {
     padding: 1.5rem;
   }
 }
+
+.job-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.job-failed .error {
+  margin: 0;
+}
