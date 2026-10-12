@@ -5,7 +5,14 @@ import { parseEnv } from "./env.js";
 import { requeueRunningJobs, runWorker } from "./jobs/worker.js";
 import { createLlm } from "./llm/index.js";
 
-const env = parseEnv(process.env);
+const env = (() => {
+  try {
+    return parseEnv(process.env);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
+})();
 const sql = connect(env.DATABASE_URL);
 const app = await buildApp({ sql, webDir: resolve("dist/web"), logger: true });
 

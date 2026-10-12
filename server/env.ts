@@ -7,6 +7,8 @@ const Env = z.discriminatedUnion("LLM_MODE", [
     LLM_MODE: z.literal("real"),
     DATABASE_URL: z.string().min(1),
     ANTHROPIC_API_KEY: z.string({ error: MISSING_KEY }).min(1, MISSING_KEY),
+    ANTHROPIC_MODEL: z.string().min(1).default("claude-opus-5-5"),
+    ANTHROPIC_EFFORT: z.enum(["low", "medium", "high"]).default("medium"),
   }),
   z.object({
     LLM_MODE: z.literal("fake"),
@@ -17,6 +19,13 @@ const Env = z.discriminatedUnion("LLM_MODE", [
 
 export type Env = z.infer<typeof Env>;
 
+/** Throws an error whose message is one readable line per problem, fit to print at boot. */
 export function parseEnv(source: NodeJS.ProcessEnv): Env {
-  return Env.parse({ ...source, LLM_MODE: source.LLM_MODE ?? "real" });
+  const result = Env.safeParse({ ...source, LLM_MODE: source.LLM_MODE ?? "real" });
+  if (result.success) return result.data;
+  const lines = result.error.issues.map((issue) => {
+    const name = issue.path.join(".");
+    return issue.message.includes(name) ? issue.message : `${name}: ${issue.message}`;
+  });
+  throw new Error(lines.join("\n"));
 }
