@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
+import { authRoutes } from "./auth/routes.js";
 import type { Sql } from "./db.js";
 import { HttpError } from "./http.js";
 
@@ -22,6 +23,8 @@ export async function buildApp(options: {
     request.log.error({ err }, "request failed");
     return reply.code(500).send({ error: "Something went wrong. Try again." });
   });
+
+  authRoutes(app, options.sql);
 
   const webDir = options.webDir;
   if (webDir !== undefined && existsSync(webDir)) {
