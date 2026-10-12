@@ -37,7 +37,7 @@ Preconditions:
 
 ## Gotchas
 
-- The fake model never fails, and no Source makes it fail. Real mode with `ANTHROPIC_API_KEY=dummy` is the free route to a failed job, because Anthropic rejects the key on the first call and the app marks that error final. It needs outbound network from the container. Without it the job retries 3 times and ends `failed` with `Could not reach Claude. Trying again.`.
+- The fake model never fails, and no Source makes it fail. Real mode with `ANTHROPIC_API_KEY=dummy` is the free route to a failed job, because Anthropic rejects the key on the first call and the app marks that error final. It needs outbound network from the container. Without it the job retries 3 times and ends `failed` with `Could not reach Claude.`.
 - Never set a real key for this. Real mode with a real key calls Claude for every job and costs money.
 - A mode switch restarts the app, and boot requeues any job that was running. A job requeued in real mode fails too, with `attempts` 2.
 - Three different buttons are named `Try again`: the account check, a failed CV load, and a failed job. The context tells them apart.

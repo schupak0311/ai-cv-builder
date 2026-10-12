@@ -142,7 +142,7 @@ describe("jobs", () => {
     const app = await ctx.app();
     const cookie = await signUp(app, "anna@example.com");
     const id = await createCv(app, cookie);
-    const busy = await deps(failingLlm(new LlmError("Claude is busy right now. Try again in a minute.", true)));
+    const busy = await deps(failingLlm(new LlmError("Claude is busy right now.", true)));
 
     await processNextJob(busy);
     expect((await detail(app, cookie, id)).job?.status).toBe("queued");
@@ -153,7 +153,7 @@ describe("jobs", () => {
     const cv = await detail(app, cookie, id);
     expect(cv.job).toBeNull();
     expect(cv.content).toBeNull();
-    expect(cv.error).toBe("Claude is busy right now. Try again in a minute.");
+    expect(cv.error).toBe("Claude is busy right now.");
     expect(await ctx.sql`select status, attempts from jobs`).toEqual([{ status: "failed", attempts: 3 }]);
     expect(await processNextJob(busy)).toBe(false);
   });

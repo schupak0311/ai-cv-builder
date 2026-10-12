@@ -16,9 +16,9 @@ const FORMAT = zodOutputFormat(CvDraft);
 const WRONG_SHAPE = "Claude returned a draft in the wrong shape.";
 
 function toLlmError(err: unknown): unknown {
-  if (err instanceof Anthropic.RateLimitError) return new LlmError("Claude is busy right now. Try again in a minute.", true);
-  if (err instanceof Anthropic.APIConnectionError) return new LlmError("Could not reach Claude. Trying again.", true);
-  if (err instanceof Anthropic.InternalServerError) return new LlmError("Claude is having trouble right now. Try again in a minute.", true);
+  if (err instanceof Anthropic.RateLimitError) return new LlmError("Claude is busy right now.", true);
+  if (err instanceof Anthropic.APIConnectionError) return new LlmError("Could not reach Claude.", true);
+  if (err instanceof Anthropic.InternalServerError) return new LlmError("Claude is having trouble right now.", true);
   if (err instanceof Anthropic.AuthenticationError) return new LlmError("The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.", false);
   if (err instanceof Anthropic.PermissionDeniedError) return new LlmError("The Anthropic API key may not use this model.", false);
   if (err instanceof Anthropic.NotFoundError) return new LlmError("The Claude model was not found. Check CV_MODEL.", false);

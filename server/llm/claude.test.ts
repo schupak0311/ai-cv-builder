@@ -109,19 +109,19 @@ describe("Claude client", () => {
     {
       name: "a rate limit",
       reply: () => Promise.reject(new Anthropic.RateLimitError(429, undefined, "rate_limit_error", headers)),
-      message: "Claude is busy right now. Try again in a minute.",
+      message: "Claude is busy right now.",
       retryable: true,
     },
     {
       name: "an overloaded API",
       reply: () => Promise.reject(new Anthropic.InternalServerError(529, undefined, "overloaded_error", headers)),
-      message: "Claude is having trouble right now. Try again in a minute.",
+      message: "Claude is having trouble right now.",
       retryable: true,
     },
     {
       name: "a timeout",
       reply: () => Promise.reject(new Anthropic.APIConnectionTimeoutError()),
-      message: "Could not reach Claude. Trying again.",
+      message: "Could not reach Claude.",
       retryable: true,
     },
     {
