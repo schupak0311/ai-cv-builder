@@ -93,3 +93,34 @@ export async function deleteCv(sql: Sql, ownerId: UserId, id: string): Promise<b
   const rows = await sql`delete from cvs where id = ${id} and owner_id = ${ownerId} returning id`;
   return rows.length > 0;
 }
+
+export type SaveResult =
+  | { kind: "saved"; version: number }
+  | { kind: "not-found" }
+  | { kind: "no-content" }
+  | { kind: "job-active" }
+  | { kind: "stale" };
+
+export async function saveCvContent(
+  sql: Sql,
+  input: { ownerId: UserId; id: string; content: Cv; version: number },
+): Promise<SaveResult> {
+  const [saved] = await sql<{ version: number }[]>`
+    update cvs set content = ${sql.json(input.content)}, version = version + 1, updated_at = now()
+    where id = ${input.id} and owner_id = ${input.ownerId} and version = ${input.version}
+      and content is not null
+      and not exists (select 1 from jobs where cv_id = cvs.id and status in ('queued', 'running'))
+    returning version
+  `;
+  if (saved !== undefined) return { kind: "saved", version: saved.version };
+
+  const [cv] = await sql<{ hasContent: boolean; jobActive: boolean }[]>`
+    select content is not null as has_content,
+      exists (select 1 from jobs where cv_id = cvs.id and status in ('queued', 'running')) as job_active
+    from cvs where id = ${input.id} and owner_id = ${input.ownerId}
+  `;
+  if (cv === undefined) return { kind: "not-found" };
+  if (cv.jobActive) return { kind: "job-active" };
+  if (!cv.hasContent) return { kind: "no-content" };
+  return { kind: "stale" };
+}
