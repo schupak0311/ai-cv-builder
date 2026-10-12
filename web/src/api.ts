@@ -15,11 +15,16 @@ const ErrorBody = z.object({ error: z.string() });
 
 export async function request<T>(path: string, schema: z.ZodType<T>, init?: { method: string; body?: unknown }): Promise<T> {
   const body = init?.body;
-  const res = await fetch(path, {
-    method: init?.method ?? "GET",
-    headers: body === undefined || body instanceof FormData ? {} : { "content-type": "application/json" },
-    body: body === undefined ? null : body instanceof FormData ? body : JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: init?.method ?? "GET",
+      headers: body === undefined || body instanceof FormData ? {} : { "content-type": "application/json" },
+      body: body === undefined ? null : body instanceof FormData ? body : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Could not reach the server. Check your connection and try again.");
+  }
   const json: unknown = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     const parsed = ErrorBody.safeParse(json);
