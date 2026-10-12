@@ -10,8 +10,15 @@ const STATUS_LABEL: Record<JobStatus, string> = {
   failed: "Failed",
 };
 
+const POLL_MS = 2000;
+
 export function CvListPage() {
-  const cvs = useQuery({ queryKey: ["cvs"], queryFn: api.listCvs });
+  const cvs = useQuery({
+    queryKey: ["cvs"],
+    queryFn: api.listCvs,
+    refetchInterval: (query) =>
+      query.state.data?.some((cv) => cv.status === "queued" || cv.status === "running") ? POLL_MS : false,
+  });
 
   return (
     <>
