@@ -7,10 +7,12 @@ import { HttpError, parseBody } from "../http.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { endSession, requireUser, startSession, type User } from "./sessions.js";
 
-const Credentials = z.object({
-  email: z.email("Enter a valid email address.").trim().max(254),
+const Email = z.email("Enter a valid email address.").trim().max(254);
+const SignUpBody = z.object({
+  email: Email,
   password: z.string().min(8, "Use at least 8 characters for your password.").max(200),
 });
+const LogInBody = z.object({ email: Email, password: z.string().min(1).max(200) });
 
 const WRONG_CREDENTIALS = "Wrong email or password.";
 // Compared against when the email is unknown, so a missing account costs the same scrypt time.
@@ -18,7 +20,7 @@ const DUMMY_HASH = await hashPassword("not-a-real-password");
 
 export function authRoutes(app: FastifyInstance, sql: Sql): void {
   app.post("/api/auth/signup", async (request, reply) => {
-    const { email, password } = parseBody(Credentials, request.body);
+    const { email, password } = parseBody(SignUpBody, request.body);
     const passwordHash = await hashPassword(password);
     let user: User | undefined;
     try {
@@ -37,7 +39,7 @@ export function authRoutes(app: FastifyInstance, sql: Sql): void {
   });
 
   app.post("/api/auth/login", async (request, reply) => {
-    const { email, password } = parseBody(Credentials, request.body);
+    const { email, password } = parseBody(LogInBody, request.body);
     const [row] = await sql<(User & { passwordHash: string })[]>`
       select id, email, password_hash from users where lower(email) = lower(${email})
     `;

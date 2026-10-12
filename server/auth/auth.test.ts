@@ -69,7 +69,12 @@ describe("auth", () => {
       url: "/api/auth/login",
       payload: { email: "nobody@example.com", password: "correct horse" },
     });
-    for (const res of [wrongPassword, unknownEmail]) {
+    const shortWrongPassword = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "anna@example.com", password: "nope" },
+    });
+    for (const res of [wrongPassword, unknownEmail, shortWrongPassword]) {
       expect(res.statusCode).toBe(401);
       expect(res.json()).toEqual({ error: "Wrong email or password." });
       expect(res.cookies).toEqual([]);
