@@ -2,16 +2,22 @@ import { resolve } from "node:path";
 import { buildApp } from "./app.js";
 import { connect, migrate } from "./db.js";
 import { parseEnv } from "./env.js";
+import { requeueRunningJobs, runWorker } from "./jobs/worker.js";
+import { createLlm } from "./llm/index.js";
 
 const env = parseEnv(process.env);
 const sql = connect(env.DATABASE_URL);
 const app = await buildApp({ sql, webDir: resolve("dist/web"), logger: true });
 
 const applied = await migrate(sql);
-app.log.info({ applied, llmMode: env.LLM_MODE }, "migrations applied");
+app.log.info({ applied }, "migrations applied");
+const requeued = await requeueRunningJobs(sql);
+app.log.info({ requeued, llmMode: env.LLM_MODE }, "jobs requeued");
 
+void runWorker({ sql, llm: createLlm(env), log: app.log });
 await app.listen({ host: "0.0.0.0", port: 8080 });
 
+// Exit without waiting for an in-flight job: it stays `running` and the next boot requeues it.
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, "shutting down");

@@ -3,6 +3,7 @@ import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { authRoutes } from "./auth/routes.js";
+import { cvRoutes } from "./cvs/routes.js";
 import type { Sql } from "./db.js";
 import { HttpError } from "./http.js";
 
@@ -25,6 +26,7 @@ export async function buildApp(options: {
   });
 
   authRoutes(app, options.sql);
+  cvRoutes(app, options.sql);
 
   const webDir = options.webDir;
   if (webDir !== undefined && existsSync(webDir)) {

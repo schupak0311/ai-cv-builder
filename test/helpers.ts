@@ -29,3 +29,25 @@ export function sessionCookie(cookies: { name: string; value: string }[]): strin
   if (sid === undefined) throw new Error("No sid cookie in response");
   return `sid=${sid.value}`;
 }
+
+export const SOURCE = [
+  "Anna Example",
+  "anna@example.com",
+  "+44 20 7946 0958",
+  "Backend engineer with eight years of experience building payment systems.",
+  "Led the migration of the billing service to PostgreSQL.",
+  "Cut API latency by 40% by adding a caching layer.",
+  "Skills: TypeScript, PostgreSQL, Kafka",
+].join("\n");
+
+export async function createCv(app: FastifyInstance, cookie: string): Promise<string> {
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/cvs",
+    headers: { cookie },
+    payload: { targetRole: "Senior Backend Engineer", sourceText: SOURCE },
+  });
+  expect(res.statusCode).toBe(201);
+  const { id } = res.json<{ id: string }>();
+  return id;
+}
