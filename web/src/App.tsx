@@ -34,7 +34,16 @@ function SignedIn() {
   });
 
   if (me.isPending) return <p className="page">Loading…</p>;
-  if (me.isError) return <p className="page error">{me.error.message}</p>;
+  if (me.isError) {
+    return (
+      <div className="page">
+        <p className="error">{me.error.message}</p>
+        <button type="button" disabled={me.isFetching} onClick={() => void me.refetch()}>
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (me.data === null) return <Navigate to="/login" replace />;
 
   return (
