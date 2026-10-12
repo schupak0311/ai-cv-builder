@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { describe, expect, test } from "vitest";
 import type { CvDetail } from "../../shared/api.js";
 import { createCv, signUp, useTestApp } from "../../test/helpers.js";
-import { createFakeLlm } from "../llm/fake.js";
+import { createFakeLlm, fakeDraft } from "../llm/fake.js";
 import { LlmError, type Llm } from "../llm/llm.js";
 import { claimNextJob, processNextJob, requeueRunningJobs } from "./worker.js";
 
@@ -68,6 +68,32 @@ describe("jobs", () => {
     const list = await app.inject({ method: "GET", url: "/api/cvs", headers: { cookie } });
     expect(list.json()).toMatchObject([{ id, status: "done" }]);
     expect(await processNextJob(await deps(fakeLlm))).toBe(false);
+  });
+
+  test("invented Claims from the model never reach the stored CV", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const id = await createCv(app, cookie);
+    const inventing: Llm = {
+      draft(input) {
+        const draft = fakeDraft(input);
+        const [job] = draft.experience;
+        if (job === undefined) throw new Error("The fake draft has no experience item");
+        job.employer = "Globex Payments";
+        job.evidence = ["Led the migration of the billing service to PostgreSQL."];
+        job.bullets.push({
+          text: "Grew checkout conversion by 40%.",
+          evidence: ["Led the migration of the billing service to PostgreSQL."],
+        });
+        return Promise.resolve(draft);
+      },
+    };
+
+    await processNextJob(await deps(inventing));
+
+    const cv = await detail(app, cookie, id);
+    expect(cv.error).toBeNull();
+    expect(cv.content).toEqual(EXPECTED_CONTENT);
   });
 
   test("a retryable model error is retried, then fails after three attempts", async () => {

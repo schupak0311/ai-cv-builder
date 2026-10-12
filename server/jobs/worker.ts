@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type { FastifyBaseLogger } from "fastify";
 import type { Sql } from "../db.js";
+import { checkDraft, countClaims } from "../factcheck/factcheck.js";
 import { draftToCv, LlmError, type Llm } from "../llm/llm.js";
 
 export const MAX_ATTEMPTS = 3;
@@ -33,13 +34,16 @@ export async function requeueRunningJobs(sql: Sql): Promise<number> {
   return rows.length;
 }
 
-async function runGenerate({ sql, llm }: WorkerDeps, job: ClaimedJob): Promise<void> {
+async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Promise<void> {
   const [cv] = await sql<{ targetRole: string; sourceText: string }[]>`
     select target_role, source_text from cvs where id = ${job.cvId}
   `;
   if (cv === undefined) return;
   const draft = await llm.draft({ targetRole: cv.targetRole, source: cv.sourceText });
-  const { content, questions } = draftToCv(draft);
+  const checked = checkDraft(draft, { targetRole: cv.targetRole, texts: [cv.sourceText] });
+  const claims = countClaims(draft);
+  log.info({ jobId: job.id, claims, dropped: claims - countClaims(checked) }, "fact check");
+  const { content, questions } = draftToCv(checked);
   await sql.begin(async (tx) => {
     await tx`update cvs set content = ${tx.json(content)}, updated_at = now() where id = ${job.cvId}`;
     for (const q of questions) {
