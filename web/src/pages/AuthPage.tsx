@@ -49,11 +49,11 @@ export function AuthPage({ mode }: { mode: "signup" | "login" }) {
       <p>
         {isSignUp ? (
           <>
-            Already have an account? <Link to="/login">Log in</Link>
+            Already have an account? <Link to="/login" className="inline-link">Log in</Link>
           </>
         ) : (
           <>
-            New here? <Link to="/signup">Create an account</Link>
+            New here? <Link to="/signup" className="inline-link">Create an account</Link>
           </>
         )}
       </p>
