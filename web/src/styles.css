@@ -186,3 +186,36 @@ button.danger {
     justify-content: space-between;
   }
 }
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.choice legend {
+  font-weight: 500;
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+
+.choice label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+  min-height: 2.75rem;
+}
+
+.choice input {
+  width: auto;
+  margin: 0;
+}
+
+input[type="file"] {
+  padding: 0.5rem;
+  min-height: 2.75rem;
+}

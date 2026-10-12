@@ -13,10 +13,11 @@ export class ApiError extends Error {
 const ErrorBody = z.object({ error: z.string() });
 
 async function request<T>(path: string, schema: z.ZodType<T>, init?: { method: string; body?: unknown }): Promise<T> {
+  const body = init?.body;
   const res = await fetch(path, {
     method: init?.method ?? "GET",
-    headers: init?.body === undefined ? {} : { "content-type": "application/json" },
-    body: init?.body === undefined ? null : JSON.stringify(init.body),
+    headers: body === undefined || body instanceof FormData ? {} : { "content-type": "application/json" },
+    body: body === undefined ? null : body instanceof FormData ? body : JSON.stringify(body),
   });
   const json: unknown = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
@@ -44,5 +45,11 @@ export const api = {
   getCv: (id: string) => request(`/api/cvs/${encodeURIComponent(id)}`, CvDetail),
   createCv: (body: { targetRole: string; sourceText: string }) =>
     request("/api/cvs", Created, { method: "POST", body }),
+  createCvFromPdf: ({ targetRole, file }: { targetRole: string; file: File }) => {
+    const body = new FormData();
+    body.append("targetRole", targetRole);
+    body.append("file", file);
+    return request("/api/cvs", Created, { method: "POST", body });
+  },
   deleteCv: (id: string) => request(`/api/cvs/${encodeURIComponent(id)}`, z.null(), { method: "DELETE" }),
 };
