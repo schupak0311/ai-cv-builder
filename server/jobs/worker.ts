@@ -59,9 +59,10 @@ async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Prom
   log.info({ jobId: job.id, claims, dropped: claims - countClaims(checked) }, "fact check");
   const { content, questions } = draftToCv(checked);
   await sql.begin(async (tx) => {
-    await tx`
+    const updated = await tx`
       update cvs set content = ${tx.json(content)}, version = version + 1, updated_at = now() where id = ${job.cvId}
     `;
+    if (updated.count === 0) return;
     for (const q of questions) {
       await tx`
         insert into questions (cv_id, section, text, created_at) values (${job.cvId}, ${q.section}, ${q.text}, clock_timestamp())
@@ -79,7 +80,8 @@ async function runRevise({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Promis
   const [question] = await sql<{ section: CvSection; text: string }[]>`
     select section, text from questions where id = ${questionId} and cv_id = ${job.cvId}
   `;
-  if (cv?.content == null || question === undefined) throw new Error("Revise job has no CV content or Question");
+  if (cv === undefined) return;
+  if (cv.content === null || question === undefined) throw new Error("Revise job has no CV content or Question");
   const stored = await sql<AnsweredQuestion[]>`
     select section, text, answer from questions
     where cv_id = ${job.cvId} and answer is not null
@@ -95,10 +97,11 @@ async function runRevise({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Promis
   const { content } = revision;
   if (content === null) throw new LlmError(UNUSABLE_ANSWER, false);
   await sql.begin(async (tx) => {
-    await tx`
+    const updated = await tx`
       update cvs set content = ${tx.json(content)}, version = version + 1, updated_at = now()
       where id = ${job.cvId}
     `;
+    if (updated.count === 0) return;
     await tx`update questions set answer = ${answer}, answered_at = now() where id = ${questionId}`;
     await tx`update jobs set status = 'done', error = null, updated_at = now() where id = ${job.id}`;
   });

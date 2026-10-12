@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { CvDetail } from "../../shared/api.js";
 import { createCv, signUp, useTestApp } from "../../test/helpers.js";
 import { createFakeLlm, fakeDraft, fakeRevise } from "../llm/fake.js";
@@ -136,6 +136,27 @@ describe("jobs", () => {
     ]);
     const save = await app.inject({ method: "PUT", url: `/api/cvs/${id}`, headers: { cookie }, payload: { content: cv.content, version: cv.version } });
     expect(save.statusCode).toBe(200);
+  });
+
+  test("a CV deleted while its job runs ends the job quietly with nothing stored", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const id = await createCv(app, cookie);
+    const deleting: Llm = {
+      async draft(input) {
+        await app.inject({ method: "DELETE", url: `/api/cvs/${id}`, headers: { cookie } });
+        return fakeDraft(input);
+      },
+      revise: () => Promise.reject(new Error("unused")),
+    };
+    const log = app.log.child({});
+    const error = vi.spyOn(log, "error");
+
+    expect(await processNextJob({ sql: ctx.sql, llm: deleting, log })).toBe(true);
+
+    expect(error).not.toHaveBeenCalled();
+    expect(await ctx.sql`select id from cvs`).toEqual([]);
+    expect(await ctx.sql`select id from questions`).toEqual([]);
   });
 
   test("a retryable model error is retried, then fails after three attempts", async () => {
