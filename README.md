@@ -55,15 +55,16 @@ So every AI-written sentence, bullet and experience or education field in a stor
 
 The check is mechanical. It catches invented names and numbers, not invented prose. These limits remain:
 
-- Lowercase embellishment passes. In a live run, "english and portuguese pretty well" became "fluent in Italian, English and Portuguese", because the quote is real and "fluent" is neither a number nor a name.
+- Lowercase embellishment and inference pass. In a live run, "english and portuguese pretty well" became "fluent in Italian, English and Portuguese", and a bullet called the user "her", though the Source gives no pronoun. The quotes were real, and neither word is a number or a name.
 - A title-case word that starts a sentence is unchecked. Checking it would also drop rephrased verbs such as "Led". That loses too much.
 - One long quote that spans two adjacent jobs pools their vocabulary, so a bullet under one job can borrow the other's names.
 - A real fact that the check misreads is dropped without notice.
 
-Two live runs on 2026-10-12 show the check on real model output. Both used `CV_MODEL=claude-sonnet-5-5` at effort `medium` to keep testing cheap. They are single runs, not a benchmark, and the default model, `claude-opus-5-5`, was not measured.
+Live runs on 2026-10-12 show the check on real model output. To keep testing cheap, most used `CV_MODEL=claude-sonnet-5-5` at effort `medium`, and one smoke run used the default, `claude-opus-5-5`. They are single runs, not a benchmark.
 
-- **Smoke script.** The free-text draft took 8.5 s with 2,302 input and 1,236 output tokens. The fact check kept 22 of 26 Claims, and the model asked 7 Questions. Answering one Question added both of its facts to the experience section in 4.2 s and changed no other section. The injection sample's planted MIT, PhD, CTO and Google never appeared in the model's output.
-- **Full flow through Compose.** Uploading `test/fixtures/one-column-en.pdf` produced a draft in 11 s. Every kept fact matched the PDF, and the fact check kept all 41 Claims. The Questions asked about the missing end date at Brightwater Insurance and about each vague bullet. Answering the date question set that end date to "March 2021" in about 6 s. The downloaded PDF was one A4 page.
+- **Smoke script on Sonnet.** The free-text draft took 8.5 s with 2,302 input and 1,236 output tokens. The fact check kept 22 of 26 Claims, and the model asked 7 Questions. Answering one Question added both of its facts to the experience section in 4.2 s and changed no other section. The injection sample's planted MIT, PhD, CTO and Google never appeared in the model's output.
+- **Smoke script on the default model.** On `claude-opus-5-5` the free-text draft took 23.8 s with 2,302 input and 2,573 output tokens. The fact check kept 21 of 26 Claims, and the model asked 8 Questions. The Answer added both of its facts in 10.9 s and changed no other section, and no planted term appeared.
+- **Full flow through Compose on Sonnet.** Uploading `test/fixtures/one-column-en.pdf` produced a draft in 11 s. Every kept fact matched the PDF, and the fact check kept all 41 Claims. The Questions asked about the missing end date at Brightwater Insurance and about each vague bullet. Answering the date question set that end date to "March 2021" in about 6 s. The downloaded PDF was one A4 page.
 
 ## What was simplified, and what would change with more time
 
