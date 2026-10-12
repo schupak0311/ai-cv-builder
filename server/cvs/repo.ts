@@ -1,4 +1,4 @@
-import type { ActiveJob, CvDetail, CvSummary, JobStatus } from "../../shared/api.js";
+import type { ActiveJob, CvDetail, CvSummary, JobKind, JobStatus } from "../../shared/api.js";
 import type { Cv, CvSection } from "../../shared/cv.js";
 import type { UserId } from "../auth/sessions.js";
 import type { Sql } from "../db.js";
@@ -49,9 +49,9 @@ export async function getCv(sql: Sql, ownerId: UserId, id: string): Promise<CvDe
   `;
   if (cv === undefined) return null;
   const [latestJob] = await sql<
-    { id: string; status: JobStatus; error: string | null; createdAt: Date }[]
+    { id: string; kind: JobKind; status: JobStatus; error: string | null; createdAt: Date }[]
   >`
-    select id, status, error, created_at from jobs where cv_id = ${id} order by created_at desc limit 1
+    select id, kind, status, error, created_at from jobs where cv_id = ${id} order by created_at desc limit 1
   `;
   const questions = await sql<
     { id: string; section: CvSection; text: string; answer: string | null }[]
@@ -72,13 +72,13 @@ export async function getCv(sql: Sql, ownerId: UserId, id: string): Promise<CvDe
 }
 
 function activeJob(
-  job: { id: string; status: JobStatus; createdAt: Date } | undefined,
+  job: { id: string; kind: JobKind; status: JobStatus; createdAt: Date } | undefined,
 ): ActiveJob | null {
   if (job === undefined) return null;
   switch (job.status) {
     case "queued":
     case "running":
-      return { id: job.id, status: job.status, createdAt: job.createdAt.toISOString() };
+      return { id: job.id, kind: job.kind, status: job.status, createdAt: job.createdAt.toISOString() };
     case "done":
     case "failed":
       return null;

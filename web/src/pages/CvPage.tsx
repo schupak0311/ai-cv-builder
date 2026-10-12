@@ -75,11 +75,16 @@ function JobProgress({ job }: { job: ActiveJob }) {
   return (
     <div className="progress" role="status">
       <p>
-        <strong>{job.status === "queued" ? "Waiting to start" : "Writing your CV"}</strong> · {seconds} s
+        <strong>{jobLabel(job)}</strong> · {seconds} s
       </p>
       <p className="muted">This can take a minute. You can leave this page and come back later.</p>
     </div>
   );
+}
+
+function jobLabel(job: ActiveJob): string {
+  if (job.status === "queued") return "Waiting to start";
+  return job.kind === "revise" ? "Updating your CV" : "Writing your CV";
 }
 
 function useNow(intervalMs: number): number {

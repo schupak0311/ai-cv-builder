@@ -82,6 +82,8 @@ describe("saving hand edits", () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({ error: "Wait for the current update to finish." });
     expect(await storedContent(id)).toEqual({ content: CONTENT, version: 1 });
+    const detail = await app.inject({ method: "GET", url: `/api/cvs/${id}`, headers: { cookie } });
+    expect(detail.json()).toMatchObject({ job: { kind: "revise", status: "queued" } });
   });
 
   test("a CV without content yet cannot be saved", async () => {

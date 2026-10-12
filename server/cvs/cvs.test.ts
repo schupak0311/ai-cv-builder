@@ -16,7 +16,7 @@ describe("CVs", () => {
       targetRole: "Senior Backend Engineer",
       content: null,
       version: 1,
-      job: { status: "queued" },
+      job: { kind: "generate", status: "queued" },
       error: null,
       questions: [],
     });

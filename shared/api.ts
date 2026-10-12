@@ -16,8 +16,12 @@ export const CvSummary = z.object({
 });
 export type CvSummary = z.infer<typeof CvSummary>;
 
+export const JobKind = z.enum(["generate", "revise"]);
+export type JobKind = z.infer<typeof JobKind>;
+
 export const ActiveJob = z.object({
   id: z.string(),
+  kind: JobKind,
   status: z.enum(["queued", "running"]),
   createdAt: z.string(),
 });
