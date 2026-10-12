@@ -177,12 +177,26 @@ describe("jobs", () => {
     await claimNextJob(ctx.sql);
     expect((await detail(app, cookie, id)).job?.status).toBe("running");
 
-    expect(await requeueRunningJobs(ctx.sql)).toBe(1);
+    expect(await requeueRunningJobs(ctx.sql)).toEqual({ requeued: 1, failed: 0 });
     expect((await detail(app, cookie, id)).job?.status).toBe("queued");
 
     await processNextJob(await deps(fakeLlm));
     const cv = await detail(app, cookie, id);
     expect(cv.job).toBeNull();
     expect(cv.content).toEqual(EXPECTED_CONTENT);
+  });
+
+  test("a job left running at boot after its last attempt fails instead of running again", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const id = await createCv(app, cookie);
+    await ctx.sql`update jobs set status = 'running', attempts = 3 where cv_id = ${id}`;
+
+    expect(await requeueRunningJobs(ctx.sql)).toEqual({ requeued: 0, failed: 1 });
+
+    const cv = await detail(app, cookie, id);
+    expect(cv.job).toBeNull();
+    expect(cv.error).toBe("Something went wrong while drafting this CV. Try again.");
+    expect(await processNextJob(await deps(fakeLlm))).toBe(false);
   });
 });

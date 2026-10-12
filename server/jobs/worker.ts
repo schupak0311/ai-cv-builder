@@ -32,12 +32,20 @@ export async function claimNextJob(sql: Sql): Promise<ClaimedJob | null> {
   return job ?? null;
 }
 
-/** Only one process runs jobs, so at boot any `running` job was interrupted and can run again. */
-export async function requeueRunningJobs(sql: Sql): Promise<number> {
-  const rows = await sql`
-    update jobs set status = 'queued', updated_at = now() where status = 'running' returning id
+/**
+ * Only one process runs jobs, so at boot any `running` job was interrupted. It runs again unless it
+ * has used every attempt, because a job that crashes the process would otherwise loop across restarts.
+ */
+export async function requeueRunningJobs(sql: Sql): Promise<{ requeued: number; failed: number }> {
+  const rows = await sql<{ status: "queued" | "failed" }[]>`
+    update jobs set
+      status = case when attempts >= ${MAX_ATTEMPTS} then 'failed' else 'queued' end,
+      error = case when attempts >= ${MAX_ATTEMPTS} then ${GENERIC_ERROR} else error end,
+      updated_at = now()
+    where status = 'running'
+    returning status
   `;
-  return rows.length;
+  return { requeued: rows.filter((r) => r.status === "queued").length, failed: rows.filter((r) => r.status === "failed").length };
 }
 
 async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Promise<void> {

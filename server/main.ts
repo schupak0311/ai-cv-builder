@@ -18,8 +18,8 @@ const app = await buildApp({ sql, webDir: resolve("dist/web"), logger: true });
 
 const applied = await migrate(sql);
 app.log.info({ applied }, "migrations applied");
-const requeued = await requeueRunningJobs(sql);
-app.log.info({ requeued, llmMode: env.LLM_MODE }, "jobs requeued");
+const { requeued, failed } = await requeueRunningJobs(sql);
+app.log.info({ requeued, failed, llmMode: env.LLM_MODE }, "jobs requeued");
 
 void runWorker({ sql, llm: createLlm(env), log: app.log });
 await app.listen({ host: "0.0.0.0", port: 8080 });
