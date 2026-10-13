@@ -273,6 +273,14 @@ describe("checkDraft", () => {
     );
   });
 
+  test("a hyphenated range in an Answer backs each of its parts", () => {
+    const answer = "I was there from Jan-Mar 2020.";
+    const input = draft({
+      experience: [job({ employer: "Brightwater Insurance", start: "Jan 2020", end: "Mar 2020", evidence: ["Data Engineer at Brightwater Insurance", answer] })],
+    });
+    expect(checkDraft(input, { texts: [SOURCE, answer] })).toEqual(input);
+  });
+
   test("Questions pass through and Answers count as corpus", () => {
     const questions: CvDraft["questions"] = [{ section: "experience", text: "When did you leave Brightwater Insurance?" }];
     const input = draft({

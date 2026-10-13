@@ -81,7 +81,7 @@ export function checkDraft(draft: CvDraft, corpus: Corpus): CvDraft {
     const joined = normalised.join(" ");
     return {
       valid: normalised.length > 0 && normalised.every((q) => words(q).size >= 2 && containsPhrase(source, q)),
-      words: words(joined),
+      words: new Set([...words(joined), ...words(normalise(quotes.join(" ").replace(/[\p{Pd}−]/gu, " ")))]),
       numbers: new Set(numbers(joined)),
     };
   }
