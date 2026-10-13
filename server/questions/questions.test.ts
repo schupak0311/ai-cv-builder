@@ -4,7 +4,7 @@ import type { CvDetail } from "../../shared/api.js";
 import { createCv, signUp, useTestApp } from "../../test/helpers.js";
 import { processNextJob } from "../jobs/worker.js";
 import { createFakeLlm } from "../llm/fake.js";
-import { LlmError, type CvDraft, type Llm } from "../llm/llm.js";
+import { LlmError, type CvDraft, type Llm, type ReviseInput } from "../llm/llm.js";
 
 const ctx = useTestApp();
 const fakeLlm = createFakeLlm(0);
@@ -51,13 +51,20 @@ async function doneCv(app: FastifyInstance, cookie: string): Promise<{ id: strin
   return { id, questionId: question.id };
 }
 
+function answerAll(app: FastifyInstance, cookie: string, id: string, answers: { questionId: string; answer: string }[]) {
+  return app.inject({ method: "POST", url: `/api/cvs/${id}/answers`, headers: { cookie }, payload: { answers } });
+}
+
 function answer(app: FastifyInstance, cookie: string, id: string, questionId: string, text: string) {
-  return app.inject({
-    method: "POST",
-    url: `/api/cvs/${id}/questions/${questionId}/answer`,
-    headers: { cookie },
-    payload: { answer: text },
-  });
+  return answerAll(app, cookie, id, [{ questionId, answer: text }]);
+}
+
+async function skillsQuestion(cvId: string): Promise<string> {
+  const [question] = await ctx.sql<{ id: string }[]>`
+    insert into questions (cv_id, section, text) values (${cvId}, 'skills', 'Which tools do you use?') returning id
+  `;
+  if (question === undefined) throw new Error("Insert returned no Question");
+  return question.id;
 }
 
 function scripted(revise: CvDraft): Llm {
@@ -91,7 +98,7 @@ describe("answering a Question", () => {
     expect(queued.questions.map((q) => q.answer)).toEqual([null]);
     expect(await jobs()).toEqual([
       { kind: "generate", payload: {}, status: "done" },
-      { kind: "revise", payload: { questionId, answer: ANSWER }, status: "queued" },
+      { kind: "revise", payload: { answers: [{ questionId, answer: ANSWER }] }, status: "queued" },
     ]);
 
     expect(await run(fakeLlm)).toBe(true);
@@ -268,8 +275,137 @@ describe("answering a Question", () => {
     expect(await jobs()).toEqual([
       { kind: "generate", payload: {}, status: "done" },
       { kind: "generate", payload: {}, status: "done" },
-      { kind: "revise", payload: { questionId: first.questionId, answer: ANSWER }, status: "done" },
+      { kind: "revise", payload: { answers: [{ questionId: first.questionId, answer: ANSWER }] }, status: "done" },
     ]);
+  });
+});
+
+describe("answering several Questions at once", () => {
+  const SKILLS_ANSWER = "Docker and Grafana.";
+  const SKILLS = ["TypeScript", "PostgreSQL", "Kafka", "Docker", "Grafana"];
+
+  function recording(revise: CvDraft): { llm: Llm; calls: ReviseInput[] } {
+    const calls: ReviseInput[] = [];
+    const llm: Llm = {
+      draft: () => Promise.reject(new Error("unused")),
+      revise: (input) => {
+        calls.push(input);
+        return Promise.resolve(revise);
+      },
+    };
+    return { llm, calls };
+  }
+
+  test("two answers for two sections queue one job that revises both sections and bumps the version once", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const { id, questionId } = await doneCv(app, cookie);
+    const skillsId = await skillsQuestion(id);
+
+    const res = await answerAll(app, cookie, id, [
+      { questionId, answer: ANSWER },
+      { questionId: skillsId, answer: SKILLS_ANSWER },
+    ]);
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toBe("");
+    expect(await jobs()).toEqual([
+      { kind: "generate", payload: {}, status: "done" },
+      {
+        kind: "revise",
+        payload: { answers: [{ questionId, answer: ANSWER }, { questionId: skillsId, answer: SKILLS_ANSWER }] },
+        status: "queued",
+      },
+    ]);
+
+    const { llm, calls } = recording({
+      ...EMPTY,
+      summary: [
+        { text: SUMMARY, evidence: [SUMMARY] },
+        { text: ANSWER, evidence: [ANSWER] },
+      ],
+      skills: SKILLS,
+    });
+    expect(await run(llm)).toBe(true);
+
+    expect(calls.map((c) => c.section).sort()).toEqual(["skills", "summary"]);
+    for (const call of calls) {
+      expect(call.answered).toEqual([
+        { section: "summary", text: "What makes you a strong fit for the Senior Backend Engineer role?", answer: ANSWER },
+        { section: "skills", text: "Which tools do you use?", answer: SKILLS_ANSWER },
+      ]);
+    }
+    const cv = await detail(app, cookie, id);
+    expect(cv.error).toBeNull();
+    expect(cv.version).toBe(3);
+    expect(cv.content).toEqual({ ...OTHER_SECTIONS, summary: `${SUMMARY} ${ANSWER}`, skills: SKILLS });
+    expect(cv.questions.map((q) => q.answer)).toEqual([ANSWER, SKILLS_ANSWER]);
+    expect(await ctx.sql`select status from jobs order by created_at`).toEqual([{ status: "done" }, { status: "done" }]);
+  });
+
+  test("when one section comes back empty the job fails and both Questions stay open", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const { id, questionId } = await doneCv(app, cookie);
+    const skillsId = await skillsQuestion(id);
+    const res = await answerAll(app, cookie, id, [
+      { questionId, answer: ANSWER },
+      { questionId: skillsId, answer: SKILLS_ANSWER },
+    ]);
+    expect(res.statusCode).toBe(202);
+
+    await run(scripted({ ...EMPTY, summary: [{ text: "Won 3 industry awards.", evidence: ["Won 3 industry awards."] }], skills: SKILLS }));
+
+    const cv = await detail(app, cookie, id);
+    expect(cv.job).toBeNull();
+    expect(cv.error).toBe("Claude could not use this answer. Try again, or edit the section by hand.");
+    expect(cv.version).toBe(2);
+    expect(cv.content).toEqual({ ...OTHER_SECTIONS, summary: SUMMARY });
+    expect(cv.questions.map((q) => q.answer)).toEqual([null, null]);
+  });
+
+  test("a duplicate Question, an empty list or more than eight answers give 400 and queue nothing", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const { id, questionId } = await doneCv(app, cookie);
+    const nine = Array.from({ length: 9 }, () => ({ questionId: crypto.randomUUID(), answer: ANSWER }));
+
+    const rejected = [
+      {
+        res: await answerAll(app, cookie, id, [
+          { questionId, answer: ANSWER },
+          { questionId, answer: "Something else." },
+        ]),
+        error: "Answer each question only once.",
+      },
+      { res: await answerAll(app, cookie, id, []), error: "Write an answer first." },
+      { res: await answerAll(app, cookie, id, nine), error: "Send at most 8 answers at a time." },
+    ];
+    for (const { res, error } of rejected) {
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error });
+    }
+    expect(await jobs()).toEqual([{ kind: "generate", payload: {}, status: "done" }]);
+  });
+
+  test("one already-answered Question among the answers gives 409 and queues nothing", async () => {
+    const app = await ctx.app();
+    const cookie = await signUp(app, "anna@example.com");
+    const { id, questionId } = await doneCv(app, cookie);
+    expect((await answer(app, cookie, id, questionId, ANSWER)).statusCode).toBe(202);
+    await run(fakeLlm);
+    const skillsId = await skillsQuestion(id);
+
+    const res = await answerAll(app, cookie, id, [
+      { questionId: skillsId, answer: SKILLS_ANSWER },
+      { questionId, answer: "Something else." },
+    ]);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "This question already has an answer." });
+    expect(await jobs()).toEqual([
+      { kind: "generate", payload: {}, status: "done" },
+      { kind: "revise", payload: { answers: [{ questionId, answer: ANSWER }] }, status: "done" },
+    ]);
+    expect((await detail(app, cookie, id)).questions.map((q) => q.answer)).toEqual([ANSWER, null]);
   });
 });
 
@@ -294,8 +430,8 @@ describe("retrying a job", () => {
     expect(retry.statusCode).toBe(202);
     expect(await jobs()).toEqual([
       { kind: "generate", payload: {}, status: "done" },
-      { kind: "revise", payload: { questionId, answer: ANSWER }, status: "failed" },
-      { kind: "revise", payload: { questionId, answer: ANSWER }, status: "queued" },
+      { kind: "revise", payload: { answers: [{ questionId, answer: ANSWER }] }, status: "failed" },
+      { kind: "revise", payload: { answers: [{ questionId, answer: ANSWER }] }, status: "queued" },
     ]);
 
     await run(fakeLlm);

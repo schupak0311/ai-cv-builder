@@ -55,6 +55,7 @@ export const PDF_MAX_BYTES = 5 * 1024 * 1024;
 export const PDF_MAX_PAGES = 10;
 export const PDF_TEXT_MIN = 100;
 export const ANSWER_MAX = 2_000;
+export const ANSWERS_MAX = 8;
 
 export const SavedCv = z.object({ version: z.number() });
 export type SavedCv = z.infer<typeof SavedCv>;

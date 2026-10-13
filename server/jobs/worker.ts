@@ -14,7 +14,7 @@ const UNUSABLE_ANSWER = "Claude could not use this answer. Try again, or edit th
 
 type ClaimedJob = { id: string; cvId: string; kind: JobKind; payload: unknown; attempts: number };
 
-const RevisePayload = z.object({ questionId: z.uuid(), answer: z.string() });
+const RevisePayload = z.object({ answers: z.array(z.object({ questionId: z.uuid(), answer: z.string() })).min(1) });
 
 export type WorkerDeps = { sql: Sql; llm: Llm; log: FastifyBaseLogger };
 
@@ -73,36 +73,52 @@ async function runGenerate({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Prom
 }
 
 async function runRevise({ sql, llm, log }: WorkerDeps, job: ClaimedJob): Promise<void> {
-  const { questionId, answer } = RevisePayload.parse(job.payload);
+  const { answers } = RevisePayload.parse(job.payload);
+  const ids = answers.map((a) => a.questionId);
   const [cv] = await sql<{ targetRole: string; sourceText: string; content: Cv | null }[]>`
     select target_role, source_text, content from cvs where id = ${job.cvId}
   `;
-  const [question] = await sql<{ section: CvSection; text: string }[]>`
-    select section, text from questions where id = ${questionId} and cv_id = ${job.cvId}
-  `;
   if (cv === undefined) return;
-  if (cv.content === null || question === undefined) throw new Error("Revise job has no CV content or Question");
+  const questions = await sql<{ id: string; section: CvSection; text: string }[]>`
+    select id, section, text from questions where cv_id = ${job.cvId} and id = any(${sql.array(ids)}::uuid[])
+  `;
+  const content = cv.content;
+  if (content === null || questions.length !== ids.length) throw new Error("Revise job has no CV content or Question");
   const stored = await sql<AnsweredQuestion[]>`
     select section, text, answer from questions
     where cv_id = ${job.cvId} and answer is not null
     order by answered_at, id
   `;
-  const answered = [...stored, { section: question.section, text: question.text, answer }];
-  const input = { targetRole: cv.targetRole, source: cv.sourceText, section: question.section, content: cv.content, answered };
-  const revision = applyRevision(input, await llm.revise(input));
-  log.info(
-    { jobId: job.id, section: question.section, claims: revision.claims, dropped: revision.claims - revision.kept },
-    "fact check",
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  const fresh = answers.map(({ questionId, answer }) => {
+    const { section, text } = byId.get(questionId)!;
+    return { section, text, answer };
+  });
+  const answered = [...stored, ...fresh];
+  const sections = [...new Set(fresh.map((q) => q.section))];
+  const revisions = await Promise.all(
+    sections.map(async (section) => {
+      const input = { targetRole: cv.targetRole, source: cv.sourceText, section, content, answered };
+      return { section, revision: applyRevision(input, await llm.revise(input)) };
+    }),
   );
-  const { content } = revision;
-  if (content === null) throw new LlmError(UNUSABLE_ANSWER, false);
+  for (const { section, revision } of revisions) {
+    log.info({ jobId: job.id, section, claims: revision.claims, dropped: revision.claims - revision.kept }, "fact check");
+  }
+  let merged = content;
+  for (const { section, revision } of revisions) {
+    if (revision.content === null) throw new LlmError(UNUSABLE_ANSWER, false);
+    merged = { ...merged, [section]: revision.content[section] };
+  }
   await sql.begin(async (tx) => {
     const updated = await tx`
-      update cvs set content = ${tx.json(content)}, version = version + 1, updated_at = now()
+      update cvs set content = ${tx.json(merged)}, version = version + 1, updated_at = now()
       where id = ${job.cvId}
     `;
     if (updated.count === 0) return;
-    await tx`update questions set answer = ${answer}, answered_at = now() where id = ${questionId}`;
+    for (const { questionId, answer } of answers) {
+      await tx`update questions set answer = ${answer}, answered_at = now() where id = ${questionId}`;
+    }
     await tx`update jobs set status = 'done', error = null, updated_at = now() where id = ${job.id}`;
   });
 }
