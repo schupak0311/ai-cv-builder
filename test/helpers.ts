@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeEach, expect } from "vitest";
 import { buildApp } from "../server/app.js";
 import { connect } from "../server/db.js";
+import type { CvDraft } from "../server/llm/llm.js";
 import { testDatabaseUrl } from "./database.js";
 
 export function useTestApp() {
@@ -38,6 +39,40 @@ export const SOURCE = [
   "Cut API latency by 40% by adding a caching layer.",
   "Skills: TypeScript, PostgreSQL, Kafka",
 ].join("\n");
+
+/** What the model returns for `SOURCE`: every Claim quotes a Source line as its Evidence. */
+export const SOURCE_DRAFT: CvDraft = {
+  contact: { name: "Anna Example", email: "anna@example.com", phone: "+44 20 7946 0958", location: null, links: [] },
+  summary: [
+    {
+      text: "Backend engineer with eight years of experience building payment systems.",
+      evidence: ["Backend engineer with eight years of experience building payment systems."],
+    },
+  ],
+  experience: [
+    {
+      employer: null,
+      title: null,
+      location: null,
+      start: null,
+      end: null,
+      bullets: [
+        {
+          text: "Led the migration of the billing service to PostgreSQL.",
+          evidence: ["Led the migration of the billing service to PostgreSQL."],
+        },
+        {
+          text: "Cut API latency by 40% by adding a caching layer.",
+          evidence: ["Cut API latency by 40% by adding a caching layer."],
+        },
+      ],
+      evidence: [],
+    },
+  ],
+  education: [],
+  skills: ["TypeScript", "PostgreSQL", "Kafka"],
+  questions: [{ section: "summary", text: "What makes you a strong fit for the Senior Backend Engineer role?" }],
+};
 
 export async function createCv(app: FastifyInstance, cookie: string): Promise<string> {
   const res = await app.inject({

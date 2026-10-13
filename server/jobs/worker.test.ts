@@ -1,13 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { describe, expect, test, vi } from "vitest";
 import type { CvDetail } from "../../shared/api.js";
-import { createCv, signUp, useTestApp } from "../../test/helpers.js";
-import { createFakeLlm, fakeDraft, fakeRevise } from "../llm/fake.js";
+import { createCv, signUp, SOURCE_DRAFT, useTestApp } from "../../test/helpers.js";
 import { LlmError, type Llm } from "../llm/llm.js";
 import { claimNextJob, processNextJob, requeueRunningJobs } from "./worker.js";
 
 const ctx = useTestApp();
-const fakeLlm = createFakeLlm(0);
+const drafting: Llm = { draft: () => Promise.resolve(SOURCE_DRAFT), revise: () => Promise.reject(new Error("unused")) };
 
 function failingLlm(error: Error): Llm {
   return { draft: () => Promise.reject(error), revise: () => Promise.reject(error) };
@@ -51,12 +50,12 @@ const EXPECTED_CONTENT = {
 };
 
 describe("jobs", () => {
-  test("a generate job with the fake model ends done with content and questions", async () => {
+  test("a generate job ends done with content and questions", async () => {
     const app = await ctx.app();
     const cookie = await signUp(app, "anna@example.com");
     const id = await createCv(app, cookie);
 
-    expect(await processNextJob(await deps(fakeLlm))).toBe(true);
+    expect(await processNextJob(await deps(drafting))).toBe(true);
 
     const cv = await detail(app, cookie, id);
     expect(cv.job).toBeNull();
@@ -68,7 +67,7 @@ describe("jobs", () => {
     ]);
     const list = await app.inject({ method: "GET", url: "/api/cvs", headers: { cookie } });
     expect(list.json()).toMatchObject([{ id, status: "done" }]);
-    expect(await processNextJob(await deps(fakeLlm))).toBe(false);
+    expect(await processNextJob(await deps(drafting))).toBe(false);
   });
 
   test("an invented employer and an invented number from the model are dropped before the CV is stored", async () => {
@@ -76,19 +75,20 @@ describe("jobs", () => {
     const cookie = await signUp(app, "anna@example.com");
     const id = await createCv(app, cookie);
     const inventing: Llm = {
-      draft(input) {
-        const draft = fakeDraft(input);
-        const [job] = draft.experience;
-        if (job === undefined) throw new Error("The fake draft has no experience item");
-        job.employer = "Globex Payments";
-        job.evidence = ["Led the migration of the billing service to PostgreSQL."];
-        job.bullets.push({
-          text: "Grew checkout conversion by 40%.",
-          evidence: ["Led the migration of the billing service to PostgreSQL."],
-        });
-        return Promise.resolve(draft);
-      },
-      revise: (input) => Promise.resolve(fakeRevise(input)),
+      draft: () =>
+        Promise.resolve({
+          ...SOURCE_DRAFT,
+          experience: SOURCE_DRAFT.experience.map((job) => ({
+            ...job,
+            employer: "Globex Payments",
+            evidence: ["Led the migration of the billing service to PostgreSQL."],
+            bullets: [
+              ...job.bullets,
+              { text: "Grew checkout conversion by 40%.", evidence: ["Led the migration of the billing service to PostgreSQL."] },
+            ],
+          })),
+        }),
+      revise: () => Promise.reject(new Error("unused")),
     };
 
     await processNextJob(await deps(inventing));
@@ -143,9 +143,9 @@ describe("jobs", () => {
     const cookie = await signUp(app, "anna@example.com");
     const id = await createCv(app, cookie);
     const deleting: Llm = {
-      async draft(input) {
+      async draft() {
         await app.inject({ method: "DELETE", url: `/api/cvs/${id}`, headers: { cookie } });
-        return fakeDraft(input);
+        return SOURCE_DRAFT;
       },
       revise: () => Promise.reject(new Error("unused")),
     };
@@ -201,7 +201,7 @@ describe("jobs", () => {
     expect(await requeueRunningJobs(ctx.sql)).toEqual({ requeued: 1, failed: 0 });
     expect((await detail(app, cookie, id)).job?.status).toBe("queued");
 
-    await processNextJob(await deps(fakeLlm));
+    await processNextJob(await deps(drafting));
     const cv = await detail(app, cookie, id);
     expect(cv.job).toBeNull();
     expect(cv.content).toEqual(EXPECTED_CONTENT);
@@ -218,6 +218,6 @@ describe("jobs", () => {
     const cv = await detail(app, cookie, id);
     expect(cv.job).toBeNull();
     expect(cv.error).toBe("Something went wrong while drafting this CV. Try again.");
-    expect(await processNextJob(await deps(fakeLlm))).toBe(false);
+    expect(await processNextJob(await deps(drafting))).toBe(false);
   });
 });

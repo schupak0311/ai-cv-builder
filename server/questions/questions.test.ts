@@ -1,14 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { describe, expect, test } from "vitest";
 import type { CvDetail } from "../../shared/api.js";
-import { createCv, signUp, useTestApp } from "../../test/helpers.js";
+import { createCv, signUp, SOURCE_DRAFT, useTestApp } from "../../test/helpers.js";
 import { processNextJob } from "../jobs/worker.js";
-import { createFakeLlm } from "../llm/fake.js";
 import { LlmError, type CvDraft, type Llm, type ReviseInput } from "../llm/llm.js";
 
 const ctx = useTestApp();
-const fakeLlm = createFakeLlm(0);
-
 const SUMMARY = "Backend engineer with eight years of experience building payment systems.";
 const ANSWER = "I mentor two junior engineers every week.";
 const OTHER_SECTIONS = {
@@ -45,9 +42,9 @@ async function detail(app: FastifyInstance, cookie: string, id: string): Promise
 /** A CV whose generate job has finished, with its one summary Question. */
 async function doneCv(app: FastifyInstance, cookie: string): Promise<{ id: string; questionId: string }> {
   const id = await createCv(app, cookie);
-  expect(await run(fakeLlm)).toBe(true);
+  expect(await run(summaryAnswering)).toBe(true);
   const [question] = (await detail(app, cookie, id)).questions;
-  if (question === undefined) throw new Error("The fake draft has no Question");
+  if (question === undefined) throw new Error("The draft has no Question");
   return { id, questionId: question.id };
 }
 
@@ -80,6 +77,19 @@ const EMPTY: CvDraft = {
   questions: [],
 };
 
+/** Drafts `SOURCE`, and revises the summary by appending `ANSWER` to it. */
+const summaryAnswering: Llm = {
+  draft: () => Promise.resolve(SOURCE_DRAFT),
+  revise: () =>
+    Promise.resolve({
+      ...EMPTY,
+      summary: [
+        { text: SUMMARY, evidence: [SUMMARY] },
+        { text: ANSWER, evidence: [ANSWER] },
+      ],
+    }),
+};
+
 async function jobs() {
   return ctx.sql`select kind, payload, status from jobs order by created_at`;
 }
@@ -101,7 +111,7 @@ describe("answering a Question", () => {
       { kind: "revise", payload: { answers: [{ questionId, answer: ANSWER }] }, status: "queued" },
     ]);
 
-    expect(await run(fakeLlm)).toBe(true);
+    expect(await run(summaryAnswering)).toBe(true);
 
     const cv = await detail(app, cookie, id);
     expect(cv.job).toBeNull();
@@ -216,7 +226,7 @@ describe("answering a Question", () => {
     expect(afterSkills.questions.map((q) => q.answer)).toEqual([null, "Docker and Grafana."]);
 
     expect((await answer(app, cookie, id, questionId, ANSWER)).statusCode).toBe(202);
-    await run(fakeLlm);
+    await run(summaryAnswering);
     const cv = await detail(app, cookie, id);
     expect(cv.content).toEqual({
       ...OTHER_SECTIONS,
@@ -231,7 +241,7 @@ describe("answering a Question", () => {
     const cookie = await signUp(app, "anna@example.com");
     const { id, questionId } = await doneCv(app, cookie);
     expect((await answer(app, cookie, id, questionId, `I mentor\u0000 two junior engineers every week.`)).statusCode).toBe(202);
-    await run(fakeLlm);
+    await run(summaryAnswering);
     expect((await detail(app, cookie, id)).questions.map((q) => q.answer)).toEqual([ANSWER]);
   });
 
@@ -264,7 +274,7 @@ describe("answering a Question", () => {
     expect(busy.statusCode).toBe(409);
     expect(busy.json()).toEqual({ error: "Wait for the current update to finish." });
 
-    await run(fakeLlm);
+    await run(summaryAnswering);
     const again = await answer(app, anna, first.id, first.questionId, "Something else.");
     expect(again.statusCode).toBe(409);
     expect(again.json()).toEqual({ error: "This question already has an answer." });
@@ -392,7 +402,7 @@ describe("answering several Questions at once", () => {
     const cookie = await signUp(app, "anna@example.com");
     const { id, questionId } = await doneCv(app, cookie);
     expect((await answer(app, cookie, id, questionId, ANSWER)).statusCode).toBe(202);
-    await run(fakeLlm);
+    await run(summaryAnswering);
     const skillsId = await skillsQuestion(id);
 
     const res = await answerAll(app, cookie, id, [
@@ -434,7 +444,7 @@ describe("retrying a job", () => {
       { kind: "revise", payload: { answers: [{ questionId, answer: ANSWER }] }, status: "queued" },
     ]);
 
-    await run(fakeLlm);
+    await run(summaryAnswering);
     const revised = await detail(app, anna, id);
     expect(revised.content?.summary).toBe(`${SUMMARY} ${ANSWER}`);
     expect(revised.questions.map((q) => q.answer)).toEqual([ANSWER]);
