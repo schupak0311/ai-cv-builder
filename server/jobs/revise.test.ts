@@ -87,6 +87,30 @@ test("current bullets copied word for word survive quotes cut at a line break, a
   });
 });
 
+test("header fields copied from the current item survive evidence that misses them, and changed fields still need evidence", () => {
+  const left = "I left Northwind Logistics in 2024.";
+  const draft: CvDraft = {
+    ...EMPTY,
+    experience: [
+      {
+        ...header,
+        title: "Principal Engineer",
+        end: "2024",
+        bullets: [{ text: LED, evidence: ["Led API design with NestJS for booking, real-time"] }],
+        evidence: ["NORTHWIND LOGISTICS", left],
+      },
+    ],
+  };
+  expect(applyRevision({ ...input("experience"), answered: [{ section: "experience", text: "When did you leave?", answer: left }] }, draft)).toEqual({
+    content: {
+      ...CONTENT,
+      experience: [{ ...CONTENT.experience[0], title: null, end: "2024", bullets: [LED] }],
+    },
+    claims: 6,
+    kept: 5,
+  });
+});
+
 test("a current summary sentence copied word for word survives a quote cut at a line break", () => {
   const draft: CvDraft = {
     ...EMPTY,

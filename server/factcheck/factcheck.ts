@@ -1,7 +1,11 @@
+import type { Cv } from "../../shared/cv.js";
 import type { CvDraft } from "../llm/llm.js";
 
-/** The text a draft may draw facts from: the Source, later joined by Answers. */
-export type Corpus = { texts: string[] };
+/**
+ * The text a draft may draw facts from: the Source, later joined by Answers. A revision also passes
+ * the `current` CV, whose sentences and item fields are kept when copied word for word.
+ */
+export type Corpus = { texts: string[]; current?: Cv };
 
 const QUOTES: [RegExp, string][] = [
   [/[‘’‚‛′`]/g, "'"],
@@ -92,9 +96,14 @@ export function checkDraft(draft: CvDraft, corpus: Corpus): CvDraft {
     return capitalisedTerms(text, sentence).every((term) => [...words(normalise(term))].every((w) => ev.words.has(w)));
   }
 
-  const field = (value: string | null, ev: Evidence) => (value !== null && holds(value, ev, false) ? value : null);
+  const same = (a: string | null, b: string | null) => a !== null && b !== null && normalise(a) === normalise(b);
+  const current = corpus.current;
+  const currentSentences = current ? [current.summary, ...current.experience.flatMap((e) => e.bullets)].map(normalise) : [];
+  const copied = (text: string) => currentSentences.some((s) => containsPhrase(s, normalise(text)));
+  const field = (value: string | null, ev: Evidence, prior: (string | null)[]) =>
+    value !== null && (prior.some((p) => same(p, value)) || holds(value, ev, false)) ? value : null;
   const inSource = (value: string | null) => (value !== null && containsPhrase(source, normalise(value)) ? value : null);
-  const sentences = (items: CvDraft["summary"]) => items.filter((s) => holds(s.text, evidence(s.evidence), true));
+  const sentences = (items: CvDraft["summary"]) => items.filter((s) => copied(s.text) || holds(s.text, evidence(s.evidence), true));
 
   return {
     contact: {
@@ -108,12 +117,14 @@ export function checkDraft(draft: CvDraft, corpus: Corpus): CvDraft {
     experience: draft.experience
       .map((item) => {
         const ev = evidence(item.evidence);
+        const prior = current?.experience.filter((c) => same(c.employer, item.employer)) ?? [];
+        const keep = (key: "employer" | "title" | "location" | "start" | "end") => field(item[key], ev, prior.map((c) => c[key]));
         return {
-          employer: field(item.employer, ev),
-          title: field(item.title, ev),
-          location: field(item.location, ev),
-          start: field(item.start, ev),
-          end: field(item.end, ev),
+          employer: keep("employer"),
+          title: keep("title"),
+          location: keep("location"),
+          start: keep("start"),
+          end: keep("end"),
           bullets: sentences(item.bullets),
           evidence: item.evidence,
         };
@@ -122,11 +133,13 @@ export function checkDraft(draft: CvDraft, corpus: Corpus): CvDraft {
     education: draft.education
       .map((item) => {
         const ev = evidence(item.evidence);
+        const prior = current?.education.filter((c) => same(c.institution, item.institution)) ?? [];
+        const keep = (key: "institution" | "degree" | "start" | "end") => field(item[key], ev, prior.map((c) => c[key]));
         return {
-          institution: field(item.institution, ev),
-          degree: field(item.degree, ev),
-          start: field(item.start, ev),
-          end: field(item.end, ev),
+          institution: keep("institution"),
+          degree: keep("degree"),
+          start: keep("start"),
+          end: keep("end"),
           evidence: item.evidence,
         };
       })
