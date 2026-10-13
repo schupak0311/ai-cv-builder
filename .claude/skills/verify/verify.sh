@@ -2,10 +2,25 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-PROJECT="$(basename "$REPO" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
+CHECKOUT="$(basename "$REPO" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
+PROJECT="${CV_VERIFY_PROJECT:-$CHECKOUT-verify}"
+MODEL="${CV_MODEL:-claude-sonnet-5-5}"
+EFFORT="${CV_EFFORT:-medium}"
 EVIDENCE_ROOT="${CV_VERIFY_EVIDENCE_ROOT:-/tmp/cv-builder-verify}"
 
-dc() { docker compose --project-directory "$REPO" "$@"; }
+if [ "$PROJECT" = "$CHECKOUT" ]; then
+  echo "refusing project $PROJECT: it is the checkout's own app, not a verify instance" >&2
+  exit 2
+fi
+case "$MODEL" in *haiku*) echo "refusing CV_MODEL=$MODEL: verify never runs on Haiku" >&2; exit 2 ;; esac
+
+dc() { docker compose -p "$PROJECT" --project-directory "$REPO" "$@"; }
+
+running_env() { dc exec -T app printenv "$1" 2>/dev/null || true; }
+
+has_key() {
+  [ -n "${ANTHROPIC_API_KEY:-}" ] || grep -qE '^ANTHROPIC_API_KEY=.+' "$REPO/.env" 2>/dev/null
+}
 
 published_port() {
   { dc port app 8080 2>/dev/null || true; } | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' | head -1
@@ -37,32 +52,28 @@ wait_ready() {
 
 cmd_up() {
   local port
+  has_key || { echo "Set ANTHROPIC_API_KEY in $REPO/.env; verify runs on the real model" >&2; exit 1; }
   port="$(published_port)"
   if [ -n "$port" ]; then
-    local running_delay running_mode
-    running_delay="$(dc exec -T app printenv FAKE_LLM_DELAY_MS 2>/dev/null || true)"
-    running_mode="$(dc exec -T app printenv LLM_MODE 2>/dev/null || true)"
-    FAKE_LLM_DELAY_MS="${FAKE_LLM_DELAY_MS:-${running_delay:-5000}}"
-    if [ "${LLM_MODE:-fake}" = "$running_mode" ] && [ "$FAKE_LLM_DELAY_MS" = "$running_delay" ]; then
-      echo "already up (project $PROJECT, LLM_MODE=$running_mode FAKE_LLM_DELAY_MS=$running_delay)"
+    local running_model running_effort
+    running_model="$(running_env CV_MODEL)"
+    running_effort="$(running_env CV_EFFORT)"
+    if [ "$MODEL" = "$running_model" ] && [ "$EFFORT" = "$running_effort" ]; then
+      echo "already up (project $PROJECT, CV_MODEL=$running_model CV_EFFORT=$running_effort)"
       wait_ready "$port"
       return
     fi
-    echo "recreating app with LLM_MODE=${LLM_MODE:-fake} FAKE_LLM_DELAY_MS=$FAKE_LLM_DELAY_MS (was $running_mode, $running_delay); data is kept"
+    echo "recreating app with CV_MODEL=$MODEL CV_EFFORT=$EFFORT (was $running_model, $running_effort); data is kept"
   else
     port="${PORT:-$(free_port 18080)}"
   fi
-  echo "project $PROJECT: starting on port $port with LLM_MODE=${LLM_MODE:-fake} FAKE_LLM_DELAY_MS=${FAKE_LLM_DELAY_MS:-5000}"
-  LLM_MODE="${LLM_MODE:-fake}" \
-    ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-dummy}" \
-    FAKE_LLM_DELAY_MS="${FAKE_LLM_DELAY_MS:-5000}" \
-    PORT="$port" \
-    dc up -d --build db app
+  echo "project $PROJECT: starting on port $port with CV_MODEL=$MODEL CV_EFFORT=$EFFORT"
+  CV_MODEL="$MODEL" CV_EFFORT="$EFFORT" PORT="$port" dc up -d --build db app
   wait_ready "$port"
 }
 
 cmd_doctor() {
-  local port body mode logs fail=0
+  local port body model logs fail=0
   echo "repo:    $REPO"
   echo "project: $PROJECT"
   dc ps app db
@@ -72,8 +83,10 @@ cmd_doctor() {
   body="$(curl -s "http://$PROJECT.localhost:$port/api/me" || true)"
   if [ "$body" = '{"error":"Log in to continue."}' ]; then echo "ok   GET /api/me answers 401 JSON"; else echo "FAIL GET /api/me returned: $body"; fail=1; fi
   if grep -q 'id="root"' <<<"$(curl -s "http://$PROJECT.localhost:$port/login" || true)"; then echo "ok   SPA served at /login"; else echo "FAIL SPA not served"; fail=1; fi
-  mode="$(dc exec -T app printenv LLM_MODE 2>/dev/null || true)"
-  if [ "$mode" = "fake" ]; then echo "ok   LLM_MODE=fake FAKE_LLM_DELAY_MS=$(dc exec -T app printenv FAKE_LLM_DELAY_MS)"; else echo "WARN LLM_MODE=$mode (expected fake)"; fi
+  model="$(running_env CV_MODEL)"
+  echo "model:   CV_MODEL=$model CV_EFFORT=$(running_env CV_EFFORT)"
+  if [ "$model" != "claude-sonnet-5-5" ]; then echo "WARN CV_MODEL=$model (verify default is claude-sonnet-5-5)"; fi
+  if dc exec -T app sh -c '[ -n "$ANTHROPIC_API_KEY" ]' >/dev/null 2>&1; then echo "ok   ANTHROPIC_API_KEY set"; else echo "FAIL ANTHROPIC_API_KEY missing"; fail=1; fi
   logs="$(dc logs --no-color app 2>/dev/null || true)"
   if grep -q '"migrations applied"' <<<"$logs"; then echo "ok   migrations applied"; else echo "FAIL no 'migrations applied' log line"; fail=1; fi
   echo "image:   $(docker image inspect "$PROJECT-app" --format '{{.Created}}' 2>/dev/null || echo unknown) (HEAD $(git -C "$REPO" log -1 --format='%h %cI'))"
