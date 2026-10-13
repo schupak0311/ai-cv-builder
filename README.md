@@ -44,12 +44,13 @@ The prompt asks the model not to invent facts. The fact check removes what it in
 
 `server/factcheck/factcheck.ts` checks every draft and revision against a corpus of the Source, plus, for a revision, every Answer and the section text the model was shown. The Target role is not in the corpus. The rules are these:
 
-1. Both sides are normalised with NFKC, lower case, one form of each quote and dash, hyphens between letters ignored, and collapsed whitespace.
+1. Both sides are normalised with NFKC, lower case, one form of each quote and dash, hyphens between letters ignored, and collapsed whitespace. Each part of a hyphenated word, such as "Jan" in "Jan-Mar", also counts as a word of the Evidence.
 2. Every Evidence quote must be at least two words long and occur in the corpus at word boundaries, so "15" inside "2015" does not count.
 3. Every number in a Claim, including spelled-out ones such as "four" or "twenty-five", must appear in that Claim's own Evidence.
 4. Every term with an uppercase letter, such as `Meta` or `iOS`, must appear in the Claim's own Evidence. Only a sentence's plain title-case first word, such as "Led", is exempt, and a colon does not start a sentence.
 5. Contact values and skills must appear in the corpus as whole phrases.
 6. A failing sentence, bullet, contact value or skill is dropped, a failing header field becomes null, and an empty item is dropped. The worker logs the count.
+7. A revision keeps any sentence, bullet or item field it copies word for word from the current CV, which was already checked or typed by the user. An item field counts as copied only from an item with the same employer or institution.
 
 So every AI-written sentence, bullet and experience or education field in a stored CV rests on a quote of at least two words from the user's own text. That quote holds its numbers and non-exempt uppercase terms. Hand edits are not checked.
 
@@ -58,7 +59,7 @@ The check catches invented names and numbers, not invented prose. These limits r
 - Lowercase embellishment and inference pass. In a live run, "english and portuguese pretty well" became "fluent in Italian, English and Portuguese", and a bullet called the user "her" with no pronoun in the Source.
 - A sentence's title-case first word is unchecked, because checking it would also drop rephrased verbs such as "Led".
 - One long quote that spans two adjacent jobs pools their vocabulary, so a bullet under one job can borrow the other's names.
-- A real fact that the check misreads is dropped without notice.
+- A real fact that the check misreads is dropped without notice. On a PDF with hard line wraps the model often ends a quote at a line break, so a first draft can lose Claims whose names sit on the next line.
 
 Single live runs on 2026-10-12 at effort `medium` show the check on real model output.
 
