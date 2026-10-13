@@ -38,52 +38,49 @@ Compose runs Postgres 17 and one Node 22 process, which serves the Fastify REST 
 
 ## How the AI is kept from inventing facts
 
-The prompt asks the model not to invent facts. The fact check removes what it invents anyway.
+Every AI-written sentence, bullet and experience or education field in a stored CV rests on quotes of at least two words from the user's own text. Those quotes contain every number and every capitalised word of the Claim they back, except a sentence's first word. Hand edits are not checked.
 
-`server/llm/prompt.ts` puts the Source in `<source_document>` tags, escapes any copy of those tags inside it, and calls the block data, never instructions. It asks for Evidence, passages copied from the Source, on every summary sentence, bullet and experience or education item. The app keeps at most 8 Questions.
+The prompt asks the model not to invent facts, and the fact check removes what it invents anyway. The rules are these:
 
-`server/factcheck/factcheck.ts` checks every draft and revision against a corpus of the Source, plus, for a revision, every Answer and the section text the model was shown. The Target role is not in the corpus. The rules are these:
+1. `server/llm/prompt.ts` wraps the Source in `<source_document>` tags, escapes any copy of those tags inside it, and tells the model that the block is data, never instructions.
+2. The output format in `server/llm/llm.ts` requires Evidence on every summary sentence, bullet, and experience or education entry. The prompt asks for passages copied exactly from the user's own text.
+3. `server/factcheck/factcheck.ts` normalises the Evidence, the Claim and the corpus the same way, so case, spacing, hyphens between letters, and the different quote and dash characters do not matter. The corpus is the Source. The Target role is not part of it.
+4. A Claim survives only when each Evidence quote is at least two words long and occurs in the corpus as whole words. The Evidence must also hold every number in the Claim, in digits or in words such as "four". It must hold every word with a capital letter too, such as `Meta` or `iOS`, except a sentence's first word. Contact values and skills have no Evidence, so each must occur in the corpus as a whole phrase. A Claim that fails is dropped.
+5. `server/jobs/revise.ts` checks a revision the same way, with every Answer and the section's current text added to the corpus. The check also keeps any sentence or bullet copied word for word from the current CV, and any unchanged field of an experience or education entry, even without matching Evidence. That text was already checked or typed by the user.
 
-1. Both sides are normalised with NFKC, lower case, one form of each quote and dash, hyphens between letters ignored, and collapsed whitespace. Each part of a hyphenated word, such as "Jan" in "Jan-Mar", also counts as a word of the Evidence.
-2. Every Evidence quote must be at least two words long and occur in the corpus at word boundaries, so "15" inside "2015" does not count.
-3. Every number in a Claim, including spelled-out ones such as "four" or "twenty-five", must appear in that Claim's own Evidence.
-4. Every term with an uppercase letter, such as `Meta` or `iOS`, must appear in the Claim's own Evidence. Only a sentence's plain title-case first word, such as "Led", is exempt, and a colon does not start a sentence.
-5. Contact values and skills must appear in the corpus as whole phrases.
-6. A failing sentence, bullet, contact value or skill is dropped, a failing header field becomes null, and an empty item is dropped. The worker logs the count.
-7. A revision keeps any sentence, bullet or item field it copies word for word from the current CV, which was already checked or typed by the user. An item field counts as copied only from an item with the same employer or institution.
+The rules catch invented names and numbers, not invented prose. These gaps remain:
 
-So every AI-written sentence, bullet and experience or education field in a stored CV rests on a quote of at least two words from the user's own text. That quote holds its numbers and non-exempt uppercase terms. Hand edits are not checked.
+- Lowercase words other than numbers are not checked, so embellishment and guesses pass. In a live run, "english and portuguese pretty well" became "fluent in Italian, English and Portuguese", and a bullet called the user "her" with no pronoun in the Source.
+- A sentence's first word is not checked when it is a plain capitalised word, because checking it would drop rephrased verbs such as "Led". So a name such as "Google" passes unchecked when it opens a sentence.
+- A quote that spans two neighbouring experience entries lets a bullet under one entry use names from the other.
+- A real fact that the rules misread is dropped without notice. On a PDF with hard line wraps, the model often ends a quote at a line break, so a new CV can lose Claims whose names sit on the next line.
 
-The check catches invented names and numbers, not invented prose. These limits remain:
+Single live runs on 2026-10-12 at effort `medium` show the rules on real model output:
 
-- Lowercase embellishment and inference pass. In a live run, "english and portuguese pretty well" became "fluent in Italian, English and Portuguese", and a bullet called the user "her" with no pronoun in the Source.
-- A sentence's title-case first word is unchecked, because checking it would also drop rephrased verbs such as "Led".
-- One long quote that spans two adjacent jobs pools their vocabulary, so a bullet under one job can borrow the other's names.
-- A real fact that the check misreads is dropped without notice. On a PDF with hard line wraps the model often ends a quote at a line break, so a first draft can lose Claims whose names sit on the next line.
-
-Single live runs on 2026-10-12 at effort `medium` show the check on real model output.
-
-- **Smoke script.** On `claude-sonnet-5-5` the free-text draft took 8.5 s, with 2,302 input and 1,236 output tokens, 22 of 26 Claims kept and 7 Questions. On the default `claude-opus-5-5` it took 23.8 s, with 2,302 input and 2,573 output tokens, 21 of 26 Claims kept and 8 Questions. One Answer added both its facts to the experience section and changed no other section, in 4.2 s on `claude-sonnet-5-5` and 10.9 s on the default model. Neither model's output contained the planted MIT, PhD, CTO or Google.
-- **Full flow through Compose on `claude-sonnet-5-5`.** A draft from `test/fixtures/one-column-en.pdf` took 11 s, and the check kept all 41 Claims, each matching the PDF. The Questions covered the missing end date at Brightwater Insurance and each vague bullet. The date Answer set that end date to "March 2021" in about 6 s, and the downloaded PDF was one A4 page.
+- On `test/fixtures/freetext.txt` the rules kept 22 of 26 Claims on `claude-sonnet-5-5` and 21 of 26 on the default `claude-opus-5-5`. On both models, one Answer added both its facts to the experience section and changed no other section.
+- Neither model's output for `test/fixtures/injection.txt` contained the planted MIT, PhD, CTO or Google.
+- Through Compose on `claude-sonnet-5-5`, the rules kept all 41 Claims of a CV from `test/fixtures/one-column-en.pdf`, and each matched the PDF.
 
 ## What was simplified, and what would change with more time
 
-These parts are simplified:
-
-- Sources and CVs are English only.
-- A failing Claim is dropped, not held for the user to confirm.
-- One in-process worker runs jobs, with no lease or heartbeat.
-- The browser polls instead of keeping a stream open.
-- PDF parsing runs on the API's event loop with no time limit, and there is no OCR.
-- The SDK's own retries stack with the worker's.
-- Only the server has tests, and there is no CI. The verify skill checks browser flows when an agent runs it.
-- Tests use hand-written drafts in place of model replies.
+| Simplification | What it means |
+| --- | --- |
+| Sources and CVs are English only. | The prompt always asks for an English CV, and only English number words count as numbers. |
+| A failing Claim is dropped, not held for the user to confirm. | The user never learns which Claims were dropped. The server log has only the count. |
+| One in-process worker runs jobs, with no lease or heartbeat. | The app must run as one process. At boot it requeues every running job, so a second process would rerun jobs the first one is still running. |
+| The browser polls instead of keeping a stream open. | The CV page asks for the job status every 2 seconds while a job runs, so it learns a job finished up to 2 seconds late. |
+| PDF parsing runs on the API's event loop with no time limit, and there is no OCR. | A slow PDF delays other requests while it parses. A scanned PDF has no text to extract, so the upload is rejected. |
+| There is no rate limiting, and the session cookie has no `Secure` flag. | A client can sign up, log in and create CVs as fast as it likes, and every new CV spends Claude tokens. Without `Secure`, the cookie also works over plain HTTP, such as a phone on the local network. |
+| The SDK's own retries stack with the worker's. | The SDK sends a rate-limited call up to 3 times, and the worker runs the job up to 3 times, so one call can go out 9 times. |
+| Only the server has tests, and there is no CI. | No test runs the React app. A Claude Code session can drive it in a browser with the skill in `.claude/skills/verify/`. |
+| Tests replace the model with hand-written output. | They cover the rules and the jobs, not what the real model writes. `npm run smoke:live` runs the real model on two sample Sources. |
+| A Question closes once its section is revised, even if the Answer's fact never reached the CV. | If the rules leave a revised section empty, the job fails and its Questions stay open. When every revised section keeps some content, every Question in the job closes and cannot be answered again. An Answer that the model ignored, or whose fact the rules dropped, then has to be added by hand. |
 
 With more time, these would come first:
 
-1. Run `npm run smoke:live` on real CVs and tune the rules on what the check wrongly drops and misses.
+1. Run `npm run smoke:live` on real CVs and tune the rules on what they wrongly drop and miss.
 2. Turn a failed Claim into a Question instead of dropping it.
-3. Build the revise flow as one unit. Parallel units assembled it, and the review found it the least integrated part.
+3. Check that each Answer's fact reached its section, as `npm run smoke:live` does, and keep the Question open when it did not.
 4. Move PDF parsing into the worker with a time limit, and keep one layer of retries.
 5. Add browser tests for the main flow.
 
