@@ -8,7 +8,7 @@ MODEL="${CV_MODEL:-claude-sonnet-5-5}"
 EFFORT="${CV_EFFORT:-medium}"
 EVIDENCE_ROOT="${CV_VERIFY_EVIDENCE_ROOT:-/tmp/cv-builder-verify}"
 
-if [ "$PROJECT" = "$CHECKOUT" ]; then
+if [ "$PROJECT" = "$CHECKOUT" ] || [ "$PROJECT" = "ai-cv-builder" ]; then
   echo "refusing project $PROJECT: it is the checkout's own app, not a verify instance" >&2
   exit 2
 fi
