@@ -10,11 +10,11 @@ You need Docker with Compose.
 2. Build and start the app with `docker compose up --build`.
 3. Open `http://localhost:8080` and sign up.
 
-To run without a key, set `LLM_MODE=fake` in `.env`. The fake model in `server/llm/fake.ts` quotes the Source's own lines in place of Claude. Otherwise a missing key stops the app at boot with `Set ANTHROPIC_API_KEY in .env`.
+The app always calls Claude. A missing key stops it at boot with `Set ANTHROPIC_API_KEY in .env`.
 
-Optional settings are `CV_MODEL` (default `claude-opus-5-5`), `CV_EFFORT` (`low`, `medium` or `high`, default `medium`), `FAKE_LLM_DELAY_MS` and `PORT`. They avoid `ANTHROPIC_MODEL` because Claude Code reads it for its own model, and Compose would pass a value such as `opus` into the app.
+Optional settings are `CV_MODEL` (default `claude-opus-5-5`), `CV_EFFORT` (`low`, `medium` or `high`, default `medium`) and `PORT`. Set `CV_MODEL=claude-sonnet-5-5` for a cheaper model while testing. They avoid `ANTHROPIC_MODEL` because Claude Code reads it for its own model, and Compose would pass a value such as `opus` into the app.
 
-Run the tests with `docker compose --profile test run --rm --build test`. They need no key and use a separate in-memory Postgres. To run `npm test` against your own Postgres, set `DATABASE_URL` to a database you can lose, because the test setup drops its schema.
+Run the tests with `docker compose --profile test run --rm --build test`. They need no key, because each test scripts the model's reply as a literal draft, and they use a separate in-memory Postgres. To run `npm test` against your own Postgres, set `DATABASE_URL` to a database you can lose, because the test setup drops its schema.
 
 `npm run smoke:live` needs `ANTHROPIC_API_KEY` exported in your shell. On the real API it drafts `test/fixtures/freetext.txt`, answers one of its Questions, and drafts `test/fixtures/injection.txt`, which plants an instruction to add a PhD from MIT. Set `CV_MODEL=claude-sonnet-5-5` for a cheaper model.
 
@@ -30,7 +30,7 @@ Compose runs Postgres 17 and one Node 22 process, which serves the Fastify REST 
 
 **Structured output, checked before parsing.** The client calls `messages.create`, not `messages.parse`, so it can read `stop_reason` first. A refusal fails the job, a cut-off reply is retried, and only then is the JSON parsed against the zod schema.
 
-**Answers revise one section.** An Answer queues a `revise` job for its Question's section and is stored only if that job succeeds, so a failed revise leaves the Question open.
+**Answers revise only their own sections.** The Questions panel sends every filled-in Answer in one request, after saving any unsaved edits. That queues one `revise` job, which rewrites each answered section in its own model call. The Answers are stored only if every section succeeds, so a failed revise leaves all of its Questions open.
 
 **Untrusted input.** Pasted text is 50 to 20,000 characters. An upload must start with `%PDF-`, be at most 5 MB and 10 pages, and yield at least 100 characters of text, so a scanned PDF is rejected. React and the PDF renderer write text only.
 
@@ -77,7 +77,7 @@ These parts are simplified:
 - PDF parsing runs on the API's event loop with no time limit, and there is no OCR.
 - The SDK's own retries stack with the worker's.
 - Only the server has tests, and there is no CI. The verify skill checks browser flows when an agent runs it.
-- Fact-check tests use hand-written drafts and the fake model.
+- Tests use hand-written drafts in place of model replies.
 
 With more time, these would come first:
 
