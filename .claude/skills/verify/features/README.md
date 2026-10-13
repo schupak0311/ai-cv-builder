@@ -1,12 +1,12 @@
 # AI CV Builder verification map
 
-This directory is the maintained source for verifying what a user of the AI CV Builder sees. Read this index before driving the app, then use the matching feature file as the recipe. `V` is the helper `.claude/skills/verify/verify.sh` called by absolute path, and `B=$("$V" url)`, the project's own host such as `http://ai-cv-builder-verify.localhost:18080`.
+This directory is the maintained source for verifying what a user of the AI CV Builder sees. Read this index before driving the app, then use the matching feature file as the recipe. `V` is the helper `.claude/skills/verify/verify.sh` called by absolute path, and `B=$("$V" url)`, the project's own host such as `http://ai-cv-builder-verify.localhost:18080`. The helper runs its own compose project, `ai-cv-builder-verify` in the main checkout, never the operator's `ai-cv-builder` app on port 8080.
 
-The map covers the app as of `main` at `d13845b`: sign up, log in, log out, the CV list and its polling, creating a CV from pasted text or an uploaded PDF, generation progress, the editor with Save and its version conflict, the A4 PDF download, Questions and Answers, retry of a failed job, the error states, delete, and per-user isolation. The real Claude client runs only with a key, so this map drives the fake model. The one exception is real mode with the dummy key, which is the free way to make a job fail (`retry-and-errors.md`).
+The map covers the app as of `main` at `55be1a6`: sign up, log in, log out, the CV list and its polling, creating a CV from pasted text or an uploaded PDF, generation progress, the editor with Save and its version conflict, the A4 PDF download, Questions answered together in one form, retry of a failed job, the error states, delete, and per-user isolation. There is no fake model: every job calls Claude with the key from `.env`, on `claude-sonnet-5-5` at medium effort by default. Checks assert structure and the facts that must land, not the model's wording. `CV_MODEL=claude-does-not-exist` is the free way to make a job fail (`retry-and-errors.md`).
 
 ## Baseline preconditions
 
-- `"$V" up` succeeded and `"$V" doctor` exits 0 with `LLM_MODE=fake`.
+- `"$V" up` succeeded and `"$V" doctor` exits 0 with `CV_MODEL=claude-sonnet-5-5` and `ANTHROPIC_API_KEY set`.
 - `EV=$("$V" evidence)` names this run's evidence directory.
 - You drive your own browser tab on `$B`, opened with `browser_tabs` action `new` (see the SKILL.md Drive section).
 - The browser viewport is 1280 by 800 (`browser_resize`), unless the step is the phone check.
@@ -19,7 +19,8 @@ The map covers the app as of `main` at `d13845b`: sign up, log in, log out, the 
 - API actions use `curl` with a cookie jar per user, `-c "$EV/a.jar"` on sign up and `-b "$EV/a.jar"` after.
 - Database reads go through `"$V" psql`. Never write to the database to set up a state.
 - Wait on visible text with `browser_wait_for`. The CV page polls every 2 s while a job runs.
-- The default fake draft takes 5 s. The restart recipe needs `FAKE_LLM_DELAY_MS=20000`, and the poll-failure and list-poll recipes need `30000`.
+- A draft took about 6 s and a revise about 2 s on Sonnet at medium effort. Allow up to 25 s, and wait with repeated `browser_wait_for`, or one `browser_run_code_unsafe` with `waitFor({ timeout: 60000 })`, never a fixed sleep.
+- Every job costs money. Share one drafted CV between recipes, and keep a full pass to about 15 model jobs. A pass of every feature file except `account.md` and `delete-cv.md` took 12 jobs: 7 drafts, 3 revises and 2 failures that spent nothing, and the restart step reran one draft.
 - Drafted CV fields are textboxes. `browser_wait_for` sees text, not values, so wait on `Download PDF` and read values from a snapshot or `browser_evaluate`.
 
 ## Proof and skip reporting
@@ -47,7 +48,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Generation progress](./generation-progress.md) covers the progress panel, reload during a job, and recovery after `docker compose restart app` mid-job.
 - [Edit a CV](./edit-cv.md) covers the editor's fields, Save, list add and remove, the version conflict and its Reload, and the phone layout.
 - [Download the CV as a PDF](./pdf-export.md) covers the browser download, the A4 page size and text check with `unpdf`, and the refusals.
-- [Questions and Answers](./questions.md) covers the Questions panel, the revise job's `Updating your CV`, the Answer landing in its section, and the one-answer rule.
+- [Questions and Answers](./questions.md) covers the Questions form, several Answers in one send and one revise job, unsaved edits saved first, the save-conflict path, and the answers API refusals.
 - [Retry and error states](./retry-and-errors.md) covers a failed job and `Try again`, `CV not found.`, the reconnecting alert, the expired session, the account check, and the list's polling.
 - [Delete a CV](./delete-cv.md) covers the confirm dialog, cancel, and removal from the list.
 - [Per-user isolation](./isolation.md) covers another user's CVs being invisible in the API and the browser, and refused for save, PDF, retry and Answer.
