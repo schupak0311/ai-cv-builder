@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type
 import type { CvDetail } from "../../../shared/api.js";
 import { CV_EDIT_BULLET_MAX, CV_EDIT_LIST_MAX, CV_EDIT_SHORT_MAX, CV_EDIT_SUMMARY_MAX, type Cv } from "../../../shared/cv.js";
 import { api, ApiError } from "../api.js";
+import { QuestionsPanel } from "./QuestionsPanel.js";
 
 type Experience = Cv["experience"][number];
 type Education = Cv["education"][number];
@@ -48,6 +49,10 @@ export function CvEditor({
   });
   const conflict = save.error instanceof ApiError && save.error.status === 409;
 
+  async function saveDraft() {
+    if (dirty) await save.mutateAsync(draft);
+  }
+
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     save.mutate(draft);
@@ -57,127 +62,130 @@ export function CvEditor({
   const setContact = (patch: Partial<Cv["contact"]>) => setDraft({ ...draft, contact: { ...contact, ...patch } });
 
   return (
-    <form className="editor" onSubmit={onSubmit}>
-      <section className="card">
-        <h2>Contact</h2>
-        <div className="grid">
-          <TextField label="Name" value={contact.name} onChange={(name) => setContact({ name })} />
-          <TextField label="Email" type="email" value={contact.email} onChange={(email) => setContact({ email })} />
-          <TextField label="Phone" type="tel" value={contact.phone} onChange={(phone) => setContact({ phone })} />
-          <TextField label="Location" value={contact.location} onChange={(location) => setContact({ location })} />
-        </div>
-        <ListField
-          label="Links"
-          itemLabel="Link"
-          addLabel="Add link"
-          items={contact.links}
-          maxLength={CV_EDIT_SHORT_MAX}
-          onChange={(links) => setContact({ links })}
-        />
-      </section>
-
-      <section className="card">
-        <h2>Summary</h2>
-        <label>
-          <span className="sr-only">Summary</span>
-          <GrowingTextarea
-            maxLength={CV_EDIT_SUMMARY_MAX}
-            value={draft.summary}
-            onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
+    <>
+      <QuestionsPanel cvId={id} questions={initial.questions} dirty={dirty} saveDraft={saveDraft} onSent={onReload} />
+      <form className="editor" onSubmit={onSubmit}>
+        <section className="card">
+          <h2>Contact</h2>
+          <div className="grid">
+            <TextField label="Name" value={contact.name} onChange={(name) => setContact({ name })} />
+            <TextField label="Email" type="email" value={contact.email} onChange={(email) => setContact({ email })} />
+            <TextField label="Phone" type="tel" value={contact.phone} onChange={(phone) => setContact({ phone })} />
+            <TextField label="Location" value={contact.location} onChange={(location) => setContact({ location })} />
+          </div>
+          <ListField
+            label="Links"
+            itemLabel="Link"
+            addLabel="Add link"
+            items={contact.links}
+            maxLength={CV_EDIT_SHORT_MAX}
+            onChange={(links) => setContact({ links })}
           />
-        </label>
-      </section>
+        </section>
 
-      <section className="card">
-        <h2>Experience</h2>
-        {draft.experience.map((item, index) => (
-          <ExperienceFields
-            key={item.id}
-            item={item}
-            onChange={(next) => setDraft({ ...draft, experience: replaceAt(draft.experience, index, next) })}
-            onRemove={() => setDraft({ ...draft, experience: removeAt(draft.experience, index) })}
-          />
-        ))}
-        <button
-          type="button"
-          className="secondary"
-          disabled={draft.experience.length >= CV_EDIT_LIST_MAX}
-          onClick={() =>
-            setDraft({
-              ...draft,
-              experience: [
-                ...draft.experience,
-                { id: newId("exp"), title: null, employer: null, location: null, start: null, end: null, bullets: [] },
-              ],
-            })
-          }
-        >
-          Add experience
-        </button>
-      </section>
+        <section className="card">
+          <h2>Summary</h2>
+          <label>
+            <span className="sr-only">Summary</span>
+            <GrowingTextarea
+              maxLength={CV_EDIT_SUMMARY_MAX}
+              value={draft.summary}
+              onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
+            />
+          </label>
+        </section>
 
-      <section className="card">
-        <h2>Education</h2>
-        {draft.education.map((item, index) => (
-          <EducationFields
-            key={item.id}
-            item={item}
-            onChange={(next) => setDraft({ ...draft, education: replaceAt(draft.education, index, next) })}
-            onRemove={() => setDraft({ ...draft, education: removeAt(draft.education, index) })}
-          />
-        ))}
-        <button
-          type="button"
-          className="secondary"
-          disabled={draft.education.length >= CV_EDIT_LIST_MAX}
-          onClick={() =>
-            setDraft({
-              ...draft,
-              education: [...draft.education, { id: newId("edu"), degree: null, institution: null, start: null, end: null }],
-            })
-          }
-        >
-          Add education
-        </button>
-      </section>
-
-      <section className="card">
-        <h2>Skills</h2>
-        <ListField
-          label="Skills"
-          itemLabel="Skill"
-          addLabel="Add skill"
-          items={draft.skills}
-          maxLength={CV_EDIT_SHORT_MAX}
-          onChange={(skills) => setDraft({ ...draft, skills })}
-        />
-      </section>
-
-      <div className="savebar">
-        <div className="savebar-status" role="status">
-          {save.isError ? (
-            <span className="error">{save.error.message}</span>
-          ) : dirty ? (
-            <span className="muted">Unsaved changes. The PDF has the saved version.</span>
-          ) : save.isSuccess ? (
-            <span>Saved.</span>
-          ) : null}
-        </div>
-        <div className="savebar-actions">
-          {conflict && (
-            <button type="button" className="secondary" onClick={onReload}>
-              Reload
-            </button>
-          )}
-          <a className="button secondary" href={api.pdfUrl(id)} download>
-            Download PDF
-          </a>
-          <button type="submit" disabled={!dirty || save.isPending}>
-            {save.isPending ? "Saving…" : "Save"}
+        <section className="card">
+          <h2>Experience</h2>
+          {draft.experience.map((item, index) => (
+            <ExperienceFields
+              key={item.id}
+              item={item}
+              onChange={(next) => setDraft({ ...draft, experience: replaceAt(draft.experience, index, next) })}
+              onRemove={() => setDraft({ ...draft, experience: removeAt(draft.experience, index) })}
+            />
+          ))}
+          <button
+            type="button"
+            className="secondary"
+            disabled={draft.experience.length >= CV_EDIT_LIST_MAX}
+            onClick={() =>
+              setDraft({
+                ...draft,
+                experience: [
+                  ...draft.experience,
+                  { id: newId("exp"), title: null, employer: null, location: null, start: null, end: null, bullets: [] },
+                ],
+              })
+            }
+          >
+            Add experience
           </button>
+        </section>
+
+        <section className="card">
+          <h2>Education</h2>
+          {draft.education.map((item, index) => (
+            <EducationFields
+              key={item.id}
+              item={item}
+              onChange={(next) => setDraft({ ...draft, education: replaceAt(draft.education, index, next) })}
+              onRemove={() => setDraft({ ...draft, education: removeAt(draft.education, index) })}
+            />
+          ))}
+          <button
+            type="button"
+            className="secondary"
+            disabled={draft.education.length >= CV_EDIT_LIST_MAX}
+            onClick={() =>
+              setDraft({
+                ...draft,
+                education: [...draft.education, { id: newId("edu"), degree: null, institution: null, start: null, end: null }],
+              })
+            }
+          >
+            Add education
+          </button>
+        </section>
+
+        <section className="card">
+          <h2>Skills</h2>
+          <ListField
+            label="Skills"
+            itemLabel="Skill"
+            addLabel="Add skill"
+            items={draft.skills}
+            maxLength={CV_EDIT_SHORT_MAX}
+            onChange={(skills) => setDraft({ ...draft, skills })}
+          />
+        </section>
+
+        <div className="savebar">
+          <div className="savebar-status" role="status">
+            {save.isError ? (
+              <span className="error">{save.error.message}</span>
+            ) : dirty ? (
+              <span className="muted">Unsaved changes. The PDF has the saved version.</span>
+            ) : save.isSuccess ? (
+              <span>Saved.</span>
+            ) : null}
+          </div>
+          <div className="savebar-actions">
+            {conflict && (
+              <button type="button" className="secondary" onClick={onReload}>
+                Reload
+              </button>
+            )}
+            <a className="button secondary" href={api.pdfUrl(id)} download>
+              Download PDF
+            </a>
+            <button type="submit" disabled={!dirty || save.isPending}>
+              {save.isPending ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
+    </>
   );
 }
 

@@ -4,7 +4,6 @@ import { Link, useNavigate, useParams } from "react-router";
 import type { ActiveJob } from "../../../shared/api.js";
 import { api, ApiError } from "../api.js";
 import { CvEditor } from "../components/CvEditor.js";
-import { QuestionsPanel } from "../components/QuestionsPanel.js";
 import { RetryJob } from "../components/RetryJob.js";
 
 const POLL_MS = 2000;
@@ -85,16 +84,13 @@ export function CvPage() {
         </div>
       )}
       {job === null && content !== null && (
-        <>
-          <QuestionsPanel cv={detail} blocked={editing} />
-          <CvEditor
-            key={loads}
-            id={id}
-            initial={{ ...detail, content }}
-            onReload={() => void reload()}
-            onDirtyChange={setEditing}
-          />
-        </>
+        <CvEditor
+          key={loads}
+          id={id}
+          initial={{ ...detail, content }}
+          onReload={() => void reload()}
+          onDirtyChange={setEditing}
+        />
       )}
     </>
   );

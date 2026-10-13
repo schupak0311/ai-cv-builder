@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api.js";
-import { SAVE_FIRST } from "./QuestionsPanel.js";
+
+const SAVE_FIRST = "Save or discard your edits before answering a question.";
 
 export function RetryJob({ cvId, blocked }: { cvId: string; blocked: boolean }) {
   const queryClient = useQueryClient();
