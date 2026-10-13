@@ -4,8 +4,7 @@ import type { Env } from "../env.js";
 import { CvDraft, LlmError, type Llm } from "./llm.js";
 import { buildPrompt, buildRevisePrompt } from "./prompt.js";
 
-type RealEnv = Extract<Env, { LLM_MODE: "real" }>;
-export type ClaudeOptions = { model: string; effort: RealEnv["CV_EFFORT"] };
+export type ClaudeOptions = { model: string; effort: Env["CV_EFFORT"] };
 
 /** The one SDK call this module makes, so tests can pass a stub without the network. */
 export type MessagesClient = {
